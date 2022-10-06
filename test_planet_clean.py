@@ -129,7 +129,12 @@ print(res.status_code)
 stats_url = "{}/stats".format(BASE_URL)
 
 #specify item types to pull
-item_types = ["PSScene4Band"]
+# PSScene4Band and PSScene documentation links:
+# https://developers.planet.com/docs/data/psscene4band/
+# https://developers.planet.com/docs/data/psscene/
+item_types = ["PSScene4Band"] #maybe also include to PSScene (which is up to 8band)
+# TODO: verify that PSScene4Band is coming from AnalyticSR or analytic_8b_sr_udm2
+#  bundle (calibrated, BOA), should be, but verify this
 
 # Setup the request
 request = {
@@ -215,6 +220,11 @@ for f in features[:1]:
         # ** DOWNLOAD ONCE ASSET IS ACTIVE (RESPONSE CODE 204)
         # Assign a variable to the visual asset's location endpoint
         location_url = visual["location"]
+
+        # TODO: alter url to specify that images should be sent to google cloud
+        # storage assets folder using code from 
+        # here: https://developers.planet.com/docs/integrations/gee/delivery/#example-gee-delivery-payloads
+        # and here: https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/orders/ordering_and_delivery.ipynb
 
         # Download the file from an activated asset's location url
         save_dir = r'C:\Users\P\Pictures\PythonTestDownloads'
