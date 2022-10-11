@@ -200,6 +200,8 @@ request = {
 }
 
 #%%
+p(request)
+
 # Send the POST request to the API quick search endpoint
 res = session.post(quick_url, json=request)
 

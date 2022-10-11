@@ -5,7 +5,9 @@ import planet_credentials as p_creds
 import os
 import requests
 import asyncio
+import os
 import planet
+import requests
 import json
 import geojsonio
 
@@ -49,24 +51,24 @@ geom = {
         "coordinates": [
           [
             [
-              -76.460702419281,
-              42.450694723657
+              -76.45966172218321,
+              42.44760726631182
             ],
             [
-              -76.46080970764159,
-              42.44592889231982
+              -76.45674347877502,
+              42.44760726631182
             ],
             [
-              -76.45516633987427,
-              42.445723050904434
+              -76.45674347877502,
+              42.44900851581353
             ],
             [
-              -76.45465135574341,
-              42.45056806173387
+              -76.45966172218321,
+              42.44900851581353
             ],
             [
-              -76.460702419281,
-              42.450694723657
+              -76.45966172218321,
+              42.44760726631182
             ]
           ]
         ]
@@ -80,34 +82,27 @@ geometry_filter = {
 }
 
 # Setup Date Filter
-date_filter_start = {
+date_filter = {
     "type": "DateRangeFilter", # Type of filter -> Date Range
     "field_name": "acquired", # The field to filter on: "acquired" -> Date on which the "image was taken"
     "config": {
-        "gte": "2021-06-13T00:00:00.000Z", # "gte" -> Greater than or equal to
-    }
-}
-date_filter_end = {
-    "type": "DateRangeFilter", # Type of filter -> Date Range
-    "field_name": "acquired", # The field to filter on: "acquired" -> Date on which the "image was taken"
-    "config": {
-        "lte": "2021-11-05T00:00:00.000Z", # "lte" -> less than or equal to
+        "gte": "2021-08-01T00:00:00.000Z", # "gte" -> Greater than or equal to
     }
 }
 
-# filter any images which are more than nn% clouds
+# filter any images which are more than 20% clouds
 cloud_cover_filter = {
   "type": "RangeFilter",
   "field_name": "cloud_cover",
   "config": {
-    "lte": 0.6
+    "lte": 0.2
   }
 }
 
 # Setup an "AND" logical filter
 and_filter = {
     "type": "AndFilter",
-    "config": [geometry_filter, date_filter_start, date_filter_end, cloud_cover_filter]
+    "config": [geometry_filter, date_filter, cloud_cover_filter]
 }
 
 # sanity check
@@ -138,7 +133,6 @@ stats_url = "{}/stats".format(BASE_URL)
 # https://developers.planet.com/docs/data/psscene4band/
 # https://developers.planet.com/docs/data/psscene/
 item_types = ["PSScene4Band"] #maybe also include to PSScene (which is up to 8band)
-# item_types = ["PSScene"]
 # TODO: verify that PSScene4Band is coming from AnalyticSR or analytic_8b_sr_udm2
 #  bundle (calibrated, BOA), should be, but verify this
 
@@ -192,14 +186,13 @@ print('Features present: {}'.format(feature_count))
 #%% iterate through features and do things
 # print feature's  cloud cover %
 # note: do only first img for now
-# get assets.ortho_analytic_8b_sr:download if available, otherwise 
-# "assets.ortho_analytic_4b_sr:download
-# for f in features[:1]:
-for f in features:
+for f in features[:1]:
     # show cloud coverage %
-    # print('Percent Cloud Coverage:')
-    # p(f['properties']['cloud_percent'])
-    # print('')
+    print('Percent Cloud Coverage:')
+    p(f['properties']['cloud_percent'])
+    print('')
+
+    # TODO: add code to only pull images having less than n% cloud cover as initial filter
 
     # Get the assets link for the item
     assets_url = f["_links"]["assets"]
@@ -211,47 +204,34 @@ for f in features:
     assets = res.json()
 
     #rad. calibrated img to surface reflectance
-    # 4 band, ortho rectified, corrected to BOA reflectance
-    # visual = assets["analytic_sr"] 
-    # 8 band, ortho rectified, corrected to BOA reflectance
-    # visual = assets["ortho_analytic_8b_sr"] 
-    # 4-band radiometrically calibrated, TOA
-    try:
-        visual = assets["analytic_sr"] 
+    visual = assets["analytic_sr"] 
 
-        # Setup the activation url for a particular asset (in this case the visual asset)
-        activation_url = visual["_links"]["activate"]
+    # Setup the activation url for a particular asset (in this case the visual asset)
+    activation_url = visual["_links"]["activate"]
 
-        # Send a request to the activation url to activate the item
-        res = session.get(activation_url)
+    # Send a request to the activation url to activate the item
+    res = session.get(activation_url)
 
-        # Print the response from the activation request
-        p(res.status_code) # 204 if ready
+    # Print the response from the activation request
+    p(res.status_code) # 204 if ready
 
-        #TODO write exponential retry code to attempt to dl images that aren't ready
-        if res.status_code == 204:
-            # ** DOWNLOAD ONCE ASSET IS ACTIVE (RESPONSE CODE 204)
-            # Assign a variable to the visual asset's location endpoint
-            location_url = visual["location"]
+    #TODO write exponential retry code to attempt to dl images that aren't ready
+    if res.status_code == 204:
+        # ** DOWNLOAD ONCE ASSET IS ACTIVE (RESPONSE CODE 204)
+        # Assign a variable to the visual asset's location endpoint
+        location_url = visual["location"]
 
-            # TODO: alter url to specify that images should be sent to google cloud
-            # storage assets folder using code from 
-            # here: https://developers.planet.com/docs/integrations/gee/delivery/#example-gee-delivery-payloads
-            # and here: https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/orders/ordering_and_delivery.ipynb
+        # TODO: alter url to specify that images should be sent to google cloud
+        # storage assets folder using code from 
+        # here: https://developers.planet.com/docs/integrations/gee/delivery/#example-gee-delivery-payloads
+        # and here: https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/orders/ordering_and_delivery.ipynb
 
-            # Download the file from an activated asset's location url
-            save_dir = r'C:\Users\P\Pictures\PythonTestDownloads'
-            foo = False
-            if foo:
-              fName = pl_download(location_url, save_dir)
-            print (r'Download Complete: {}\{}'.format(save_dir, fName))
-        else:
-            # TODO: exponential retry[]
-            next
-    except:
-      print('Error downloading (or activating){}'.format(f['_links']))
-      next
-print('Processing Complete - Do you need to implement paging?')
-# %%
+        # Download the file from an activated asset's location url
+        save_dir = r'C:\Users\P\Pictures\PythonTestDownloads'
+        fName = pl_download(location_url, save_dir)
+        print (r'Download Complete: {}\{}'.format(save_dir, fName))
+    else:
+        # TODO: exponential retry
+        next
 
 # %%
