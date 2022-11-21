@@ -11,12 +11,22 @@ import geojsonio
 import geopandas
 import rasterio
 
+
 # %% FUNC DEFS
 # Helper function to printformatted JSON using the json module
 def p(data):
     print(json.dumps(data, indent=2))
 
+def call_dl_fxn(perform_download, location_url, save_dir, filename=None):
+    if perform_download:
+        fName = pl_download(location_url, save_dir)
+        print (r'Download Complete: {}\{}'.format(save_dir, fName))
+    else:
+        print('Download not enabled. Change reallyDownloadTheImage to true to download')
+        print('iterated over {}'.format(location_url))
+
 # download file and save to fs
+# TODO: refactor to use expoential retry activation fxn
 def pl_download(url, savepath, filename=None):
     
     # Send a GET request to the provided location url, using your API Key for authentication
@@ -38,6 +48,32 @@ def pl_download(url, savepath, filename=None):
                 f.flush()
 
     return filename
+
+"""
+Exponential retry fxn (from planet code example at
+https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/toar/toar_planetscope.ipynb
+
+"""
+def activate_asset(assets_url, asset):
+    asset_activated = False
+
+    while asset_activated == False:
+        # Send a request to the item's assets url
+        res = session.get(assets_url)
+
+        # Assign a variable to the item's assets url response
+        assets = res.json()
+
+        asset_status = asset["status"]
+        print(asset_status)
+
+        # If asset is already active, we are done
+        if asset_status == 'active':
+            asset_activated = True
+            print("Asset is active and ready to download")
+
+    # Print the ps3b_analytic asset data    
+    return p(asset)
 
 #%% setup global vars   
 PLANET_API_KEY = p_creds.get_planet_api_key()
@@ -139,7 +175,7 @@ stats_url = "{}/stats".format(BASE_URL)
 # PSScene4Band and PSScene documentation links:
 # https://developers.planet.com/docs/data/psscene4band/
 # https://developers.planet.com/docs/data/psscene/
-item_types = ["PSScene4Band"] #maybe also include to PSScene (which is up to 8band)
+item_types = ["PSScene4Band", "PSScene"] #maybe also include to PSScene (which is up to 8band)
 # item_types = ["PSScene"]
 # TODO: verify that PSScene4Band is coming from AnalyticSR or analytic_8b_sr_udm2
 #  bundle (calibrated, BOA), should be, but verify this
@@ -203,6 +239,8 @@ for f in features:
     # p(f['properties']['cloud_percent'])
     # print('')
 
+    save_dir = r'C:\Users\P\Pictures\PythonTestDownloads'
+
     # Get the assets link for the item
     assets_url = f["_links"]["assets"]
     
@@ -219,18 +257,30 @@ for f in features:
     # visual = assets["ortho_analytic_8b_sr"] 
     # 4-band radiometrically calibrated, TOA
     try:
-        visual = assets["analytic_sr"] 
+        visual = assets["analytic_sr"]
+        visual_xml = assets["analytic_sr_xml"]
+        orthoanalytic_asset = assets["ortho_analytic_4b"]
+        orthoanalytic_xml_asset = assets["ortho_analytic_4b_xml"]
+        orthoanalytic_asset_8b = assets["ortho_analytic_8b"]
+        orthoanalytic_xml_asset_8b = assets["ortho_analytic_8b_xml"] 
 
         # Setup the activation url for a particular asset (in this case the visual asset)
-        activation_url = visual["_links"]["activate"]
-
+        activation_url_visual = visual["_links"]["activate"]
+        activation_url_visual_xml = visual_xml["_links"]["activate"]
+        activation_url_visual = orthoanalytic_asset["_links"]["activate"]
+        activation_url_visual = orthoanalytic_xml_asset["_links"]["activate"]
+        activation_url_visual = orthoanalytic_asset_8b["_links"]["activate"]
+        activation_url_visual = orthoanalytic_xml_asset_8b["_links"]["activate"]
+        
         # Send a request to the activation url to activate the item
-        res = session.get(activation_url)
+        res = session.get(activation_url_visual)
+        # TODO: Implement dl for 8band and XML files
 
         # Print the response from the activation request
-        p(res.status_code) # 204 if ready
+        p(res.status_code) # 204 if ready        
 
         #TODO write exponential retry code to attempt to dl images that aren't ready
+        reallyDownloadTheImage = False
         if res.status_code == 204:
             # ** DOWNLOAD ONCE ASSET IS ACTIVE (RESPONSE CODE 204)
             # Assign a variable to the visual asset's location endpoint
@@ -241,19 +291,24 @@ for f in features:
             # here: https://developers.planet.com/docs/integrations/gee/delivery/#example-gee-delivery-payloads
             # and here: https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/orders/ordering_and_delivery.ipynb
 
-            # Download the file from an activated asset's location url
-            save_dir = r'C:\Users\P\Pictures\PythonTestDownloads'
-            foo = False
-            if foo:
-              fName = pl_download(location_url, save_dir)
-            print (r'Download Complete: {}\{}'.format(save_dir, fName))
+            # Download the file from an activated asset's location url if flag set to do
+            # otherwise, show msg saying not dl'd and show image name
+            call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
+        elif res.status_code == 202:
+            # exponential wait retry to get the image ready to download  from Planet
+            # NOTE: currently, this code does exponential wait retry one-by-one, blocking 
+            # subsequent downloads until image is ready and downloaded;
+            # may need to refactor this to allow continued/paralled dl calls while waiting
+            # for image activation if this causes delays
+            activate_asset(assets_url, visual)
+
+            # Download the file from an activated asset's location url if flag set to do
+            # otherwise, show msg saying not dl'd and show image name
+            call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
         else:
-            # TODO: exponential retry[]
             next
     except:
       print('Error downloading (or activating){}'.format(f['_links']))
       next
 print('Processing Complete - Do you need to implement paging?')
-# %%
 
-# %%
