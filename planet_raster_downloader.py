@@ -250,6 +250,9 @@ for f in features:
     # Assign a variable to the response
     assets = res.json()
 
+    # Debugging - see how xml radiance conversion coeff files are named
+    p(assets)
+    
     #rad. calibrated img to surface reflectance
     # 4 band, ortho rectified, corrected to BOA reflectance
     # visual = assets["analytic_sr"] 
@@ -307,8 +310,11 @@ for f in features:
             call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
         else:
             next
-    except:
+    except Exception as e:
       print('Error downloading (or activating){}'.format(f['_links']))
+      print('EXCEPTION: {}'.format(e))
       next
 print('Processing Complete - Do you need to implement paging?')
 
+
+# %%
