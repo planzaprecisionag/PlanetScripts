@@ -78,6 +78,7 @@ def activate_asset(assets_url, asset):
 #%% setup global vars   
 PLANET_API_KEY = p_creds.get_planet_api_key()
 BASE_URL = "https://api.planet.com/data/v1"
+save_dir = r'C:\Users\P\Pictures\PythonTestDownloads'
 
 # %%
 # Search for imagery from our test fields on Cornell's campus
@@ -175,7 +176,8 @@ stats_url = "{}/stats".format(BASE_URL)
 # PSScene4Band and PSScene documentation links:
 # https://developers.planet.com/docs/data/psscene4band/
 # https://developers.planet.com/docs/data/psscene/
-item_types = ["PSScene4Band", "PSScene"] #maybe also include to PSScene (which is up to 8band)
+# item_types = ["PSScene4Band", "PSScene"] #maybe also include to PSScene (which is up to 8band)
+item_types = ["PSScene"]
 # item_types = ["PSScene"]
 # TODO: verify that PSScene4Band is coming from AnalyticSR or analytic_8b_sr_udm2
 #  bundle (calibrated, BOA), should be, but verify this
@@ -238,9 +240,6 @@ for f in features:
     # print('Percent Cloud Coverage:')
     # p(f['properties']['cloud_percent'])
     # print('')
-
-    save_dir = r'C:\Users\P\Pictures\PythonTestDownloads'
-
     # Get the assets link for the item
     assets_url = f["_links"]["assets"]
     
@@ -251,7 +250,7 @@ for f in features:
     assets = res.json()
 
     # Debugging - see how xml radiance conversion coeff files are named
-    p(assets)
+    #p(assets)
     
     #rad. calibrated img to surface reflectance
     # 4 band, ortho rectified, corrected to BOA reflectance
@@ -262,21 +261,23 @@ for f in features:
     try:
         visual = assets["analytic_sr"]
         visual_xml = assets["analytic_sr_xml"]
-        orthoanalytic_asset = assets["ortho_analytic_4b"]
-        orthoanalytic_xml_asset = assets["ortho_analytic_4b_xml"]
+        orthoanalytic_asset_4b = assets["ortho_analytic_4b"]
+        orthoanalytic_xml_asset_4b = assets["ortho_analytic_4b_xml"]
         orthoanalytic_asset_8b = assets["ortho_analytic_8b"]
         orthoanalytic_xml_asset_8b = assets["ortho_analytic_8b_xml"] 
 
         # Setup the activation url for a particular asset (in this case the visual asset)
         activation_url_visual = visual["_links"]["activate"]
         activation_url_visual_xml = visual_xml["_links"]["activate"]
-        activation_url_visual = orthoanalytic_asset["_links"]["activate"]
-        activation_url_visual = orthoanalytic_xml_asset["_links"]["activate"]
-        activation_url_visual = orthoanalytic_asset_8b["_links"]["activate"]
-        activation_url_visual = orthoanalytic_xml_asset_8b["_links"]["activate"]
+        activation_url_orthoanalytic_asset_4b = orthoanalytic_asset_4b["_links"]["activate"]
+        activation_url_orthoanalytic_xml_asset_4b = orthoanalytic_xml_asset_4b["_links"]["activate"]
+        activation_url_orthoanalytic_asset_8b = orthoanalytic_asset_8b["_links"]["activate"]
+        activation_url_orthoanalytic_xml_asset_8b = orthoanalytic_xml_asset_8b["_links"]["activate"]
         
-        # Send a request to the activation url to activate the item
-        res = session.get(activation_url_visual)
+        # Send a request to the activation url to activate the item and
+        # its radiance to reflectance conversion coefficients xml file
+        res = session.get(activation_url_orthoanalytic_asset_8b)
+        res_xml = session.get(activation_url_orthoanalytic_asset_8b)
         # TODO: Implement dl for 8band and XML files
 
         # Print the response from the activation request
@@ -287,34 +288,44 @@ for f in features:
         if res.status_code == 204:
             # ** DOWNLOAD ONCE ASSET IS ACTIVE (RESPONSE CODE 204)
             # Assign a variable to the visual asset's location endpoint
-            location_url = visual["location"]
+            location_url = orthoanalytic_asset_8b["location"]
+            location_url_xml = orthoanalytic_xml_asset_8b["location"]
 
             # TODO: alter url to specify that images should be sent to google cloud
             # storage assets folder using code from 
             # here: https://developers.planet.com/docs/integrations/gee/delivery/#example-gee-delivery-payloads
             # and here: https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/orders/ordering_and_delivery.ipynb
 
-            # Download the file from an activated asset's location url if flag set to do
-            # otherwise, show msg saying not dl'd and show image name
+            # Download the file from an activated asset's location url IF we are actually downloading
             call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
+            call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
         elif res.status_code == 202:
             # exponential wait retry to get the image ready to download  from Planet
             # NOTE: currently, this code does exponential wait retry one-by-one, blocking 
             # subsequent downloads until image is ready and downloaded;
             # may need to refactor this to allow continued/paralled dl calls while waiting
             # for image activation if this causes delays
-            activate_asset(assets_url, visual)
-
+            activate_asset(assets_url, orthoanalytic_asset_8b)
+            activate_asset(assets_url, orthoanalytic_xml_asset_8b)
             # Download the file from an activated asset's location url if flag set to do
             # otherwise, show msg saying not dl'd and show image name
+
+            # NOTE: lcoation key node not present until asset ready for dl, so must get it here
+            # once asset activation is complete
+            location_url = orthoanalytic_asset_8b["location"]
+            location_url_xml = orthoanalytic_xml_asset_8b["location"]
+
+            # with all of that done, we can now dl the image and xml coeff file
+            # (if we are actually downloading and not just testing / iterating through the assets)
             call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
+            call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
         else:
             next
     except Exception as e:
       print('Error downloading (or activating){}'.format(f['_links']))
       print('EXCEPTION: {}'.format(e))
       next
-print('Processing Complete - Do you need to implement paging?')
+print('Processing Complete - Do you need to implement paging? (HINT: You do if >= 250 results)')
 
 
 # %%
