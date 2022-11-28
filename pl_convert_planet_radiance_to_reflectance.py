@@ -165,5 +165,3 @@ def convert_radiance_to_reflectance(asset_type, raster_file_path, xml_coefficien
     print('Radiance converted to reflectance for: {}'.format(updated_f_path)) 
     return updated_f_path
 
-#%% Module Variables
-
