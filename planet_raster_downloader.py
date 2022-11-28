@@ -363,30 +363,3 @@ fetch_page(quick_url, search_json=request)
 
 print('Processing Complete')
 
-# %% DEBUGGING keyerror: features in response after initial post
-# set params passed to fxn
-# search_url = quick_url
-# search_json=request
-
-# print('search_url'.format(search_url))
-
-# # fxn code
-# print('Processing results from {}'.format(search_url))
-# if search_json != '':
-#     p(search_json)
-#     res = session.post(search_url, json=search_json) <- needed to add json=
-# else:
-#     print('PROCCESSING NEXT PAGE. Search params carried over from initial  search')
-#     res = session.get(search_url).json()
-# # sanity check 
-# # Print response
-# # p(res.json())
-
-# handle_page(res)
-# next_url = res["_links"].get("_next")
-# if next_url:
-#     fetch_page(next_url) 
-
-# print('ALL PAGES PROCESSED (ALL DONE).')
-
-# %%
