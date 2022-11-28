@@ -11,183 +11,8 @@ import geojsonio
 import geopandas
 import rasterio
 
-
-# %% FUNC DEFS
-# Helper function to printformatted JSON using the json module
-def p(data):
-    print(json.dumps(data, indent=2))
-
-def call_dl_fxn(perform_download, location_url, save_dir, filename=None):
-    if perform_download:
-        fName = pl_download(location_url, save_dir)
-        print (r'Download Complete: {}\{}'.format(save_dir, fName))
-    else:
-        print('Download not enabled. Change reallyDownloadTheImage to true to download')
-        print('iterated over {}'.format(location_url))
-
-# download file and save to fs
-# TODO: refactor to use expoential retry activation fxn
-def pl_download(url, savepath, filename=None):
-    
-    # Send a GET request to the provided location url, using your API Key for authentication
-    res = requests.get(url, stream=True, auth=(PLANET_API_KEY, ""))
-    # If no filename argument is given
-    if not filename:
-        # Construct a filename from the API response
-        if "content-disposition" in res.headers:
-            filename = res.headers["content-disposition"].split("filename=")[-1].strip("'\"")
-        # Construct a filename from the location url
-        else:
-            filename = url.split("=")[1][:10]
-    # Save the file
-    # with open('output/' + filename, "wb") as f:
-    with open(os.path.join(savepath, filename), "wb") as f:
-        for chunk in res.iter_content(chunk_size=1024):
-            if chunk: # filter out keep-alive new chunks
-                f.write(chunk)
-                f.flush()
-
-    return filename
-
-"""
-Exponential retry fxn (from planet code example at
-https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/toar/toar_planetscope.ipynb
-
-"""
-def activate_asset(assets_url, asset):
-    asset_activated = False
-
-    while asset_activated == False:
-        # Send a request to the item's assets url
-        res = session.get(assets_url)
-
-        # Assign a variable to the item's assets url response
-        assets = res.json()
-
-        asset_status = asset["status"]
-        print(asset_status)
-
-        # If asset is already active, we are done
-        if asset_status == 'active':
-            asset_activated = True
-            print("Asset is active and ready to download")
-
-    # Print the ps3b_analytic asset data    
-    return p(asset)
-
-# How to Paginate:
-# 1) Request a page of search results
-# 2) do something with the page of results
-# 3) if there is more data, recurse and call this method on the next page.
-# adapted from code from here:
-# https://developers.planet.com/docs/planetschool/best-practices-for-working-with-large-aois/pagination.py
-# What we want to do with each page of search results
-# in this case, just print out each id
-def handle_page(page):
-    for f in features:
-        # show cloud coverage %
-        # print('Percent Cloud Coverage:')
-        # p(f['properties']['cloud_percent'])
-        # print('')
-        # Get the assets link for the item
-        assets_url = f["_links"]["assets"]
-        
-        # Send a GET request to the assets url for the item (Get the list of available assets for the item)
-        res = session.get(assets_url)
-
-        # Assign a variable to the response
-        assets = res.json()
-
-        # Debugging - see how xml radiance conversion coeff files are named
-        #p(assets)
-        
-        #rad. calibrated img to surface reflectance
-        # 4 band, ortho rectified, corrected to BOA reflectance
-        # visual = assets["analytic_sr"] 
-        # 8 band, ortho rectified, corrected to BOA reflectance
-        # visual = assets["ortho_analytic_8b_sr"] 
-        # 4-band radiometrically calibrated, TOA
-        try:
-            visual = assets["analytic_sr"]
-            visual_xml = assets["analytic_sr_xml"]
-            orthoanalytic_asset_4b = assets["ortho_analytic_4b"]
-            orthoanalytic_xml_asset_4b = assets["ortho_analytic_4b_xml"]
-            orthoanalytic_asset_8b = assets["ortho_analytic_8b"]
-            orthoanalytic_xml_asset_8b = assets["ortho_analytic_8b_xml"] 
-
-            # Setup the activation url for a particular asset (in this case the visual asset)
-            activation_url_visual = visual["_links"]["activate"]
-            activation_url_visual_xml = visual_xml["_links"]["activate"]
-            activation_url_orthoanalytic_asset_4b = orthoanalytic_asset_4b["_links"]["activate"]
-            activation_url_orthoanalytic_xml_asset_4b = orthoanalytic_xml_asset_4b["_links"]["activate"]
-            activation_url_orthoanalytic_asset_8b = orthoanalytic_asset_8b["_links"]["activate"]
-            activation_url_orthoanalytic_xml_asset_8b = orthoanalytic_xml_asset_8b["_links"]["activate"]
-            
-            # Send a request to the activation url to activate the item and
-            # its radiance to reflectance conversion coefficients xml file
-            res = session.get(activation_url_orthoanalytic_asset_8b)
-            res_xml = session.get(activation_url_orthoanalytic_asset_8b)
-            # TODO: Implement dl for 8band and XML files
-
-            # Print the response from the activation request
-            p(res.status_code) # 204 if ready        
-
-            #TODO write exponential retry code to attempt to dl images that aren't ready
-            reallyDownloadTheImage = False
-            if res.status_code == 204:
-                # ** DOWNLOAD ONCE ASSET IS ACTIVE (RESPONSE CODE 204)
-                # Assign a variable to the visual asset's location endpoint
-                location_url = orthoanalytic_asset_8b["location"]
-                location_url_xml = orthoanalytic_xml_asset_8b["location"]
-
-                # TODO: alter url to specify that images should be sent to google cloud
-                # storage assets folder using code from 
-                # here: https://developers.planet.com/docs/integrations/gee/delivery/#example-gee-delivery-payloads
-                # and here: https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/orders/ordering_and_delivery.ipynb
-
-                # Download the file from an activated asset's location url IF we are actually downloading
-                call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
-                call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
-            elif res.status_code == 202:
-                # exponential wait retry to get the image ready to download  from Planet
-                # NOTE: currently, this code does exponential wait retry one-by-one, blocking 
-                # subsequent downloads until image is ready and downloaded;
-                # may need to refactor this to allow continued/paralled dl calls while waiting
-                # for image activation if this causes delays
-                activate_asset(assets_url, orthoanalytic_asset_8b)
-                activate_asset(assets_url, orthoanalytic_xml_asset_8b)
-                # Download the file from an activated asset's location url if flag set to do
-                # otherwise, show msg saying not dl'd and show image name
-
-                # NOTE: lcoation key node not present until asset ready for dl, so must get it here
-                # once asset activation is complete
-                location_url = orthoanalytic_asset_8b["location"]
-                location_url_xml = orthoanalytic_xml_asset_8b["location"]
-
-                # with all of that done, we can now dl the image and xml coeff file
-                # (if we are actually downloading and not just testing / iterating through the assets)
-                call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
-                call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
-            else:
-                next
-        except Exception as e:
-            print('Error downloading (or activating){}'.format(f['_links']))
-            print('EXCEPTION: {}'.format(e))
-        next
-    print('Processing Complete - Do you need to implement paging? (HINT: You do if >= 250 results)')
-    return 
-
-def fetch_page(search_url, json):
-    # page = session.get(search_url).json()
-    res = session.post(quick_url, json=request)
-    # sanity check 
-    # Print response
-    p(res.json())
-
-    handle_page(res)
-    next_url = res["_links"].get("_next")
-    if next_url:
-        fetch_page(next_url)
+#%% DEBUGGING
+debug_var = ''
 
 #%% setup global vars   
 PLANET_API_KEY = p_creds.get_planet_api_key()
@@ -279,6 +104,219 @@ res = session.get(BASE_URL)
 # print response (should be 200 if good)
 print(res.status_code)
 
+
+# %% FUNC DEFS
+# Helper function to printformatted JSON using the json module
+def p(data):
+    print(json.dumps(data, indent=2))
+
+def call_dl_fxn(perform_download, location_url, save_dir, filename=None):
+    if perform_download:
+        fName = pl_download(location_url, save_dir)
+        print (r'Download Complete: {}\{}'.format(save_dir, fName))
+    else:
+        print('Download not enabled. Change reallyDownloadTheImage to true to download')
+        print('iterated over {}'.format(location_url))
+
+# download file and save to fs
+# TODO: refactor to use expoential retry activation fxn
+def pl_download(url, savepath, filename=None):
+    
+    # Send a GET request to the provided location url, using your API Key for authentication
+    res = requests.get(url, stream=True, auth=(PLANET_API_KEY, ""))
+    # If no filename argument is given
+    if not filename:
+        # Construct a filename from the API response
+        if "content-disposition" in res.headers:
+            filename = res.headers["content-disposition"].split("filename=")[-1].strip("'\"")
+        # Construct a filename from the location url
+        else:
+            filename = url.split("=")[1][:10]
+    # Save the file
+    # with open('output/' + filename, "wb") as f:
+    with open(os.path.join(savepath, filename), "wb") as f:
+        for chunk in res.iter_content(chunk_size=1024):
+            if chunk: # filter out keep-alive new chunks
+                f.write(chunk)
+                f.flush()
+
+    return filename
+
+"""
+Exponential retry fxn (from planet code example at
+https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/toar/toar_planetscope.ipynb
+
+"""
+def activate_asset(assets_url, asset):
+    asset_activated = False
+
+    while asset_activated == False:
+        # Send a request to the item's assets url
+        res = session.get(assets_url)
+
+        # Assign a variable to the item's assets url response
+        assets = res.json()
+
+        asset_status = asset["status"]
+        print(asset_status)
+
+        # If asset is already active, we are done
+        if asset_status == 'active':
+            asset_activated = True
+            print("Asset is active and ready to download")
+
+    # Print the ps3b_analytic asset data    
+    return p(asset)
+
+# How to Paginate:
+# 1) Request a page of search results
+# 2) do something with the page of results
+# 3) if there is more data, recurse and call this method on the next page.
+# adapted from code from here:
+# https://developers.planet.com/docs/planetschool/best-practices-for-working-with-large-aois/pagination.py
+# What we want to do with each page of search results
+# in this case, just print out each id
+def handle_page(res):
+    if isinstance(res, dict):
+        json_response = res
+    else:
+        json_response = res.json()
+    # debugging
+    print('JSOn RESPONSE BELOW')
+    p(json_response)
+    # end debugging
+    features = json_response["features"]
+    # Print the response
+    # p(geojson)
+
+    #store # of features returned
+    feature_count = len(features)
+    # Get the number of features present in the response
+    print('Features present: {}'.format(feature_count))
+
+    for f in features:
+        # show cloud coverage %
+        # print('Percent Cloud Coverage:')
+        # p(f['properties']['cloud_percent'])
+        # print('')
+        # Get the assets link for the item
+        assets_url = f["_links"]["assets"]
+        
+        # Send a GET request to the assets url for the item (Get the list of available assets for the item)
+        res = session.get(assets_url)
+
+        # Assign a variable to the response
+        assets = res.json()
+
+        # Debugging - see how xml radiance conversion coeff files are named
+        #p(assets)
+        
+        #rad. calibrated img to surface reflectance
+        # 4 band, ortho rectified, corrected to BOA reflectance
+        # visual = assets["analytic_sr"] 
+        # 8 band, ortho rectified, corrected to BOA reflectance
+        # visual = assets["ortho_analytic_8b_sr"] 
+        # 4-band radiometrically calibrated, TOA
+        try:
+            visual = assets["analytic_sr"]
+            visual_xml = assets["analytic_sr_xml"]
+            orthoanalytic_asset_4b = assets["ortho_analytic_4b"]
+            orthoanalytic_xml_asset_4b = assets["ortho_analytic_4b_xml"]
+            orthoanalytic_asset_8b = assets["ortho_analytic_8b"]
+            orthoanalytic_xml_asset_8b = assets["ortho_analytic_8b_xml"] 
+
+            # Setup the activation url for a particular asset (in this case the visual asset)
+            activation_url_visual = visual["_links"]["activate"]
+            activation_url_visual_xml = visual_xml["_links"]["activate"]
+            activation_url_orthoanalytic_asset_4b = orthoanalytic_asset_4b["_links"]["activate"]
+            activation_url_orthoanalytic_xml_asset_4b = orthoanalytic_xml_asset_4b["_links"]["activate"]
+            activation_url_orthoanalytic_asset_8b = orthoanalytic_asset_8b["_links"]["activate"]
+            activation_url_orthoanalytic_xml_asset_8b = orthoanalytic_xml_asset_8b["_links"]["activate"]
+            
+            # Send a request to the activation url to activate the item and
+            # its radiance to reflectance conversion coefficients xml file
+            res = session.get(activation_url_orthoanalytic_asset_8b)
+            res_xml = session.get(activation_url_orthoanalytic_asset_8b)
+            # TODO: Implement dl for 8band and XML files
+
+            # Print the response from the activation request
+            p(res.status_code) # 204 if ready        
+
+            #TODO write exponential retry code to attempt to dl images that aren't ready
+            reallyDownloadTheImage = False
+            if res.status_code == 204:
+                # ** DOWNLOAD ONCE ASSET IS ACTIVE (RESPONSE CODE 204)
+                # Assign a variable to the visual asset's location endpoint
+                location_url = orthoanalytic_asset_8b["location"]
+                location_url_xml = orthoanalytic_xml_asset_8b["location"]
+
+                # TODO: alter url to specify that images should be sent to google cloud
+                # storage assets folder using code from 
+                # here: https://developers.planet.com/docs/integrations/gee/delivery/#example-gee-delivery-payloads
+                # and here: https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/orders/ordering_and_delivery.ipynb
+
+                # Download the file from an activated asset's location url IF we are actually downloading
+                call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
+                call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
+            elif res.status_code == 202:
+                # exponential wait retry to get the image ready to download  from Planet
+                # NOTE: currently, this code does exponential wait retry one-by-one, blocking 
+                # subsequent downloads until image is ready and downloaded;
+                # may need to refactor this to allow continued/paralled dl calls while waiting
+                # for image activation if this causes delays
+                activate_asset(assets_url, orthoanalytic_asset_8b)
+                activate_asset(assets_url, orthoanalytic_xml_asset_8b)
+                # Download the file from an activated asset's location url if flag set to do
+                # otherwise, show msg saying not dl'd and show image name
+
+                # NOTE: lcoation key node not present until asset ready for dl, so must get it here
+                # once asset activation is complete
+                location_url = orthoanalytic_asset_8b["location"]
+                location_url_xml = orthoanalytic_xml_asset_8b["location"]
+
+                # with all of that done, we can now dl the image and xml coeff file
+                # (if we are actually downloading and not just testing / iterating through the assets)
+                call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
+                call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
+            else:
+                next
+        except Exception as e:
+            print('Error downloading (or activating){}'.format(f['_links']))
+            print('EXCEPTION: {}'.format(e))
+        next
+    print('Processing Complete (for this page of results). Moving to next page of results (if present)')
+    return 
+
+def fetch_page(search_url, search_json = ''):
+    print('Processing results from {}'.format(search_url))
+    if search_json != '':
+        p(search_json)
+        # NOTE: MUST do json=... to avoid missing post body error msg when posting like below
+        res = session.post(search_url, json=search_json)
+    else:
+        print('PROCCESSING NEXT PAGE. Search params carried over from initial  search')
+        res = session.get(search_url).json()
+
+        #debugging:
+        debug_var = res
+    # sanity check 
+    # Print response
+    # p(res.json())
+
+    handle_page(res)
+
+    # fixing TypeError: 'Response' object is not subscriptable on next pages
+    try:
+        next_url = res["_links"].get("_next")
+    except:
+        resJSON = res.json()
+        next_url = resJSON["_links"].get("_next")
+
+    if next_url:
+        fetch_page(next_url) 
+    
+    print('ALL PAGES PROCESSED (ALL DONE).')
+
 #%% Setting up the API request
 
 # The /stats endpoint provides a summary of the available data based on some search criteria.
@@ -319,130 +357,36 @@ request = {
     "item_types" : item_types,
     "filter" : and_filter
 }
-# Send the POST request to the API quick search endpoint
-res = session.post(quick_url, json=request)
-# sanity check 
-# Print response
-p(res.json())
 
 #%% new process flow - get page then pass to fetch_page to allow for pagination
-fetch_page(quick_url, json=request)
+fetch_page(quick_url, search_json=request)
 
-#%%
-# Assign the response to a variable
-geojson = res.json()
-features = geojson["features"]
-# Print the response
-# p(geojson)
+print('Processing Complete')
 
-#store # of features returned
-feature_count = len(features)
-# Get the number of features present in the response
-print('Features present: {}'.format(feature_count))
+# %% DEBUGGING keyerror: features in response after initial post
+# set params passed to fxn
+# search_url = quick_url
+# search_json=request
 
-#%% Use geojson.io to show footprints of returned rasters
-# probably a lot, can use paging to limit # returned per hit, then iterate through
-# pages to limit number if many results returned
-# TODO: TS why getting 401 auth error here and not in test code
-# url = geojsonio.display(res.text)
+# print('search_url'.format(search_url))
 
-#%% iterate through features and do things
-# print feature's  cloud cover %
-# note: do only first img for now
-# get assets.ortho_analytic_8b_sr:download if available, otherwise 
-# "assets.ortho_analytic_4b_sr:download
-# for f in features[:1]:
-for f in features:
-    # show cloud coverage %
-    # print('Percent Cloud Coverage:')
-    # p(f['properties']['cloud_percent'])
-    # print('')
-    # Get the assets link for the item
-    assets_url = f["_links"]["assets"]
-    
-    # Send a GET request to the assets url for the item (Get the list of available assets for the item)
-    res = session.get(assets_url)
+# # fxn code
+# print('Processing results from {}'.format(search_url))
+# if search_json != '':
+#     p(search_json)
+#     res = session.post(search_url, json=search_json) <- needed to add json=
+# else:
+#     print('PROCCESSING NEXT PAGE. Search params carried over from initial  search')
+#     res = session.get(search_url).json()
+# # sanity check 
+# # Print response
+# # p(res.json())
 
-    # Assign a variable to the response
-    assets = res.json()
+# handle_page(res)
+# next_url = res["_links"].get("_next")
+# if next_url:
+#     fetch_page(next_url) 
 
-    # Debugging - see how xml radiance conversion coeff files are named
-    #p(assets)
-    
-    #rad. calibrated img to surface reflectance
-    # 4 band, ortho rectified, corrected to BOA reflectance
-    # visual = assets["analytic_sr"] 
-    # 8 band, ortho rectified, corrected to BOA reflectance
-    # visual = assets["ortho_analytic_8b_sr"] 
-    # 4-band radiometrically calibrated, TOA
-    try:
-        visual = assets["analytic_sr"]
-        visual_xml = assets["analytic_sr_xml"]
-        orthoanalytic_asset_4b = assets["ortho_analytic_4b"]
-        orthoanalytic_xml_asset_4b = assets["ortho_analytic_4b_xml"]
-        orthoanalytic_asset_8b = assets["ortho_analytic_8b"]
-        orthoanalytic_xml_asset_8b = assets["ortho_analytic_8b_xml"] 
-
-        # Setup the activation url for a particular asset (in this case the visual asset)
-        activation_url_visual = visual["_links"]["activate"]
-        activation_url_visual_xml = visual_xml["_links"]["activate"]
-        activation_url_orthoanalytic_asset_4b = orthoanalytic_asset_4b["_links"]["activate"]
-        activation_url_orthoanalytic_xml_asset_4b = orthoanalytic_xml_asset_4b["_links"]["activate"]
-        activation_url_orthoanalytic_asset_8b = orthoanalytic_asset_8b["_links"]["activate"]
-        activation_url_orthoanalytic_xml_asset_8b = orthoanalytic_xml_asset_8b["_links"]["activate"]
-        
-        # Send a request to the activation url to activate the item and
-        # its radiance to reflectance conversion coefficients xml file
-        res = session.get(activation_url_orthoanalytic_asset_8b)
-        res_xml = session.get(activation_url_orthoanalytic_asset_8b)
-        # TODO: Implement dl for 8band and XML files
-
-        # Print the response from the activation request
-        p(res.status_code) # 204 if ready        
-
-        #TODO write exponential retry code to attempt to dl images that aren't ready
-        reallyDownloadTheImage = False
-        if res.status_code == 204:
-            # ** DOWNLOAD ONCE ASSET IS ACTIVE (RESPONSE CODE 204)
-            # Assign a variable to the visual asset's location endpoint
-            location_url = orthoanalytic_asset_8b["location"]
-            location_url_xml = orthoanalytic_xml_asset_8b["location"]
-
-            # TODO: alter url to specify that images should be sent to google cloud
-            # storage assets folder using code from 
-            # here: https://developers.planet.com/docs/integrations/gee/delivery/#example-gee-delivery-payloads
-            # and here: https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/orders/ordering_and_delivery.ipynb
-
-            # Download the file from an activated asset's location url IF we are actually downloading
-            call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
-            call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
-        elif res.status_code == 202:
-            # exponential wait retry to get the image ready to download  from Planet
-            # NOTE: currently, this code does exponential wait retry one-by-one, blocking 
-            # subsequent downloads until image is ready and downloaded;
-            # may need to refactor this to allow continued/paralled dl calls while waiting
-            # for image activation if this causes delays
-            activate_asset(assets_url, orthoanalytic_asset_8b)
-            activate_asset(assets_url, orthoanalytic_xml_asset_8b)
-            # Download the file from an activated asset's location url if flag set to do
-            # otherwise, show msg saying not dl'd and show image name
-
-            # NOTE: lcoation key node not present until asset ready for dl, so must get it here
-            # once asset activation is complete
-            location_url = orthoanalytic_asset_8b["location"]
-            location_url_xml = orthoanalytic_xml_asset_8b["location"]
-
-            # with all of that done, we can now dl the image and xml coeff file
-            # (if we are actually downloading and not just testing / iterating through the assets)
-            call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
-            call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
-        else:
-            next
-    except Exception as e:
-      print('Error downloading (or activating){}'.format(f['_links']))
-      print('EXCEPTION: {}'.format(e))
-      next
-print('Processing Complete - Do you need to implement paging? (HINT: You do if >= 250 results)')
-
+# print('ALL PAGES PROCESSED (ALL DONE).')
 
 # %%
