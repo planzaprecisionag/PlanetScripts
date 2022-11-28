@@ -284,7 +284,7 @@ def handle_page(res):
             print('Error downloading (or activating){}'.format(f['_links']))
             print('EXCEPTION: {}'.format(e))
         next
-    print('Processing Complete (for this page of results). Moving to next page of results (if present)')
+    print('Processing (downloads) complete (for this page of results). Moving to next page of results (if present)')
     return 
 
 def fetch_page(search_url, search_json = ''):
@@ -315,7 +315,7 @@ def fetch_page(search_url, search_json = ''):
     if next_url:
         fetch_page(next_url) 
     
-    print('ALL PAGES PROCESSED (ALL DONE).')
+    print('Finished processing results from {}'.format(search_url))
 
 #%% Setting up the API request
 
