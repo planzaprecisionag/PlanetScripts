@@ -12,6 +12,7 @@ import geopandas
 import rasterio
 
 #%% DEBUGGING
+# use this var to get values from within fxns for ts'ing
 debug_var = ''
 
 #%% setup global vars   
@@ -22,6 +23,11 @@ save_dir = r'C:\Users\P\Pictures\PythonTestDownloads'
 # %%
 # Search for imagery from our test fields on Cornell's campus
 # Setup GeoJSON 
+# 
+# TODO: read in geoJSON file (created via QGIS polygon export of AOI's) and loop through each
+# field and pull down Planet rasters
+# TODO: check to see if the  file DNE locally before downloading (via the file's name vs 
+# Planet files already downloaded)
 geom = {
     "type": "Polygon",
         "coordinates": [
@@ -222,6 +228,9 @@ def handle_page(res):
             visual_xml = assets["analytic_sr_xml"]
             orthoanalytic_asset_4b = assets["ortho_analytic_4b"]
             orthoanalytic_xml_asset_4b = assets["ortho_analytic_4b_xml"]
+            orthoanalytic_asset_4b_sr = assets["ortho_analytic_4b_sr"]
+            # DONT NEED XML for SR because already REFLECTANCE
+            # orthoanalytic_xml_asset_4b_sr = assets["ortho_analytic_4b_sr_xml"]
             orthoanalytic_asset_8b = assets["ortho_analytic_8b"]
             orthoanalytic_xml_asset_8b = assets["ortho_analytic_8b_xml"] 
 
@@ -230,13 +239,14 @@ def handle_page(res):
             activation_url_visual_xml = visual_xml["_links"]["activate"]
             activation_url_orthoanalytic_asset_4b = orthoanalytic_asset_4b["_links"]["activate"]
             activation_url_orthoanalytic_xml_asset_4b = orthoanalytic_xml_asset_4b["_links"]["activate"]
+            activation_url_orthoanalytic_asset_4b_sr = orthoanalytic_asset_4b_sr["_links"]["activate"]
             activation_url_orthoanalytic_asset_8b = orthoanalytic_asset_8b["_links"]["activate"]
             activation_url_orthoanalytic_xml_asset_8b = orthoanalytic_xml_asset_8b["_links"]["activate"]
             
             # Send a request to the activation url to activate the item and
             # its radiance to reflectance conversion coefficients xml file
-            res = session.get(activation_url_orthoanalytic_asset_8b)
-            res_xml = session.get(activation_url_orthoanalytic_asset_8b)
+            res = session.get(activation_url_orthoanalytic_asset_4b_sr)
+            # res_xml = session.get(activation_url_orthoanalytic_asset_4b_sr)
             # TODO: Implement dl for 8band and XML files
 
             # Print the response from the activation request
@@ -247,8 +257,8 @@ def handle_page(res):
             if res.status_code == 204:
                 # ** DOWNLOAD ONCE ASSET IS ACTIVE (RESPONSE CODE 204)
                 # Assign a variable to the visual asset's location endpoint
-                location_url = orthoanalytic_asset_8b["location"]
-                location_url_xml = orthoanalytic_xml_asset_8b["location"]
+                location_url = activation_url_orthoanalytic_asset_4b_sr["location"]
+                # location_url_xml = orthoanalytic_xml_asset_8b["location"]
 
                 # TODO: alter url to specify that images should be sent to google cloud
                 # storage assets folder using code from 
@@ -257,27 +267,27 @@ def handle_page(res):
 
                 # Download the file from an activated asset's location url IF we are actually downloading
                 call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
-                call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
+                # call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
             elif res.status_code == 202:
                 # exponential wait retry to get the image ready to download  from Planet
                 # NOTE: currently, this code does exponential wait retry one-by-one, blocking 
                 # subsequent downloads until image is ready and downloaded;
                 # may need to refactor this to allow continued/paralled dl calls while waiting
                 # for image activation if this causes delays
-                activate_asset(assets_url, orthoanalytic_asset_8b)
-                activate_asset(assets_url, orthoanalytic_xml_asset_8b)
+                activate_asset(assets_url, activation_url_orthoanalytic_asset_4b_sr)
+                # activate_asset(assets_url, orthoanalytic_xml_asset_8b)
                 # Download the file from an activated asset's location url if flag set to do
                 # otherwise, show msg saying not dl'd and show image name
 
                 # NOTE: lcoation key node not present until asset ready for dl, so must get it here
                 # once asset activation is complete
-                location_url = orthoanalytic_asset_8b["location"]
-                location_url_xml = orthoanalytic_xml_asset_8b["location"]
+                location_url = activation_url_orthoanalytic_asset_4b_sr["location"]
+                # location_url_xml = orthoanalytic_xml_asset_8b["location"]
 
                 # with all of that done, we can now dl the image and xml coeff file
                 # (if we are actually downloading and not just testing / iterating through the assets)
                 call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
-                call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
+                # call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
             else:
                 next
         except Exception as e:
