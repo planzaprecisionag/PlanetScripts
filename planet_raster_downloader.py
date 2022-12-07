@@ -15,6 +15,117 @@ import rasterio
 # use this var to get values from within fxns for ts'ing
 debug_var = ''
 
+#%% main code entrypoints
+def get_planet_download_stats(download_save_dir:str, item_types:list, aoi_geojson_geom, 
+    asset_type:str, planet_api_key:str, planet_base_url:str, img_start_date:str, 
+    img_end_date:str, cloud_cover_percent_max, *args, **kwargs):
+
+    # get individual filters
+    geo_filter = get_geom_filter(aoi_geojson_geom)
+    start_date_filter = get_date_filter(img_start_date)
+    end_date_filter = get_date_filter(img_end_date)
+    cloud_filter = get_property_range_filter('cloud_cover', 'lte', cloud_cover_percent_max)
+    # combine them into one 'and' filter
+    filter_list = [geo_filter, start_date_filter, end_date_filter, cloud_filter]
+    search_filter = get_combined_search_filter(filter_list)
+
+    stats_url = "{}/stats".format(planet_base_url)
+    item_types = item_types
+
+    # Setup the request
+    request = {
+        "item_types" : item_types,
+        "interval" : "year",
+        "filter" : search_filter
+    }
+
+    # Send the POST request to the API stats endpoint
+    res=session.post(stats_url, json=request)
+
+    # sanity check 
+    # Print response
+    p(res.json())
+
+
+def download_planet_rasters(download_save_dir:str, item_types:str, aoi_geojson_geom, 
+    asset_type:str, planet_api_key:str, planet_base_url:str, img_start_date:str, 
+    img_end_date:str, cloud_cover_percent_max, really_download_images = False, *args, **kwargs):
+
+    # get individual filters
+    geo_filter = get_geom_filter(aoi_geojson_geom)
+    start_date_filter = get_date_filter(img_start_date)
+    end_date_filter = get_date_filter(img_end_date)
+    cloud_filter = get_property_range_filter('cloud_cover', 'lte', cloud_cover_percent_max)
+    # combine them into one 'and' filter
+    filter_list = [geo_filter, start_date_filter, end_date_filter, cloud_filter]
+    search_filter = get_combined_search_filter(filter_list)
+
+    quick_url = "{}/quick-search".format(BASE_URL)
+
+    # make new request to the data api
+    request = {
+        "item_types" : item_types,
+        "filter" : search_filter
+    }
+
+    fetch_page(quick_url, really_download_images, search_json=request)
+
+    print('Processing Complete')
+
+    return
+
+#%% utility methods
+def get_geom_filter(geojson):
+    geometry_filter = {
+        "type": "GeometryFilter",
+        "field_name": "geometry",
+        "config": geom
+    }
+
+    return geometry_filter
+
+"""
+conditional_type examples: get, lte
+date_string example: 2021-06-13T00:00:00.000Z
+"""
+def get_date_filter(conditional_type, date_string):
+    date_filter = {
+        "type": "DateRangeFilter", # Type of filter -> Date Range
+        "field_name": "acquired", # The field to filter on: "acquired" -> Date on which the "image was taken"
+        "config": {
+            conditional_type: date_string, # "gte" -> Greater than or equal to
+        }
+    }
+
+    return  date_filter
+
+"""
+ex: cloud_cover_filter = {
+  "type": "RangeFilter",
+  "field_name": "cloud_cover",
+  "config": {
+    "lte": 0.6
+  }
+}
+"""
+def get_property_range_filter(field_name, conditional_type, property_value):
+    filter = {
+        "type": "RangeFilter",
+        "field_name": field_name,
+        "config": {
+            conditional_type: property_value
+        }
+    }
+
+    return filter
+    
+def get_combined_search_filter(filter_list):
+    filter = {
+        "type": "AndFilter",
+        "config": filter_list
+    }
+
+    return filter
 #%% setup global vars   
 PLANET_API_KEY = p_creds.get_planet_api_key()
 BASE_URL = "https://api.planet.com/data/v1"
@@ -182,7 +293,7 @@ def activate_asset(assets_url, asset):
 # https://developers.planet.com/docs/planetschool/best-practices-for-working-with-large-aois/pagination.py
 # What we want to do with each page of search results
 # in this case, just print out each id
-def handle_page(res):
+def handle_page(res, really_download_images):
     if isinstance(res, dict):
         json_response = res
     else:
@@ -253,7 +364,7 @@ def handle_page(res):
             p(res.status_code) # 204 if ready        
 
             #TODO write exponential retry code to attempt to dl images that aren't ready
-            reallyDownloadTheImage = False
+            
             if res.status_code == 204:
                 # ** DOWNLOAD ONCE ASSET IS ACTIVE (RESPONSE CODE 204)
                 # Assign a variable to the visual asset's location endpoint
@@ -266,7 +377,7 @@ def handle_page(res):
                 # and here: https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/orders/ordering_and_delivery.ipynb
 
                 # Download the file from an activated asset's location url IF we are actually downloading
-                call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
+                call_dl_fxn(really_download_images, location_url, save_dir, filename=None)
                 # call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
             elif res.status_code == 202:
                 # exponential wait retry to get the image ready to download  from Planet
@@ -286,7 +397,7 @@ def handle_page(res):
 
                 # with all of that done, we can now dl the image and xml coeff file
                 # (if we are actually downloading and not just testing / iterating through the assets)
-                call_dl_fxn(reallyDownloadTheImage, location_url, save_dir, filename=None)
+                call_dl_fxn(really_download_images, location_url, save_dir, filename=None)
                 # call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
             else:
                 next
@@ -297,7 +408,7 @@ def handle_page(res):
     print('Processing (downloads) complete (for this page of results). Moving to next page of results (if present)')
     return 
 
-def fetch_page(search_url, search_json = ''):
+def fetch_page(search_url, really_download_images, search_json = ''):
     print('Processing results from {}'.format(search_url))
     if search_json != '':
         p(search_json)
@@ -313,7 +424,7 @@ def fetch_page(search_url, search_json = ''):
     # Print response
     # p(res.json())
 
-    handle_page(res)
+    handle_page(res, really_download_images)
 
     # fixing TypeError: 'Response' object is not subscriptable on next pages
     try:
@@ -323,7 +434,7 @@ def fetch_page(search_url, search_json = ''):
         next_url = resJSON["_links"].get("_next")
 
     if next_url:
-        fetch_page(next_url) 
+        fetch_page(next_url, really_download_images) 
     
     print('Finished processing results from {}'.format(search_url))
 
