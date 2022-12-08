@@ -49,7 +49,8 @@ def get_planet_download_stats(download_save_dir:str, item_types:list, aoi_geojso
 
 def download_planet_rasters(download_save_dir:str, item_types:str, aoi_geojson_geom, 
     asset_type:str, planet_api_key:str, planet_base_url:str, img_start_date:str, 
-    img_end_date:str, cloud_cover_percent_max, really_download_images = False, *args, **kwargs):
+    img_end_date:str, cloud_cover_percent_max, really_download_images = False, 
+    overwrite_existing = False, *args, **kwargs):
 
     # get individual filters
     geo_filter = get_geom_filter(aoi_geojson_geom)
@@ -68,7 +69,7 @@ def download_planet_rasters(download_save_dir:str, item_types:str, aoi_geojson_g
         "filter" : search_filter
     }
 
-    fetch_page(quick_url, really_download_images, search_json=request)
+    fetch_page(quick_url, really_download_images, search_json=request, overwrite_existing=overwrite_existing)
 
     print('Processing Complete')
 
@@ -227,9 +228,9 @@ print(res.status_code)
 def p(data):
     print(json.dumps(data, indent=2))
 
-def call_dl_fxn(perform_download, location_url, save_dir, filename=None):
+def call_dl_fxn(perform_download, location_url, save_dir, filename=None, overwrite_existing=False):
     if perform_download:
-        fName = pl_download(location_url, save_dir)
+        fName = pl_download(location_url, save_dir, overwrite_existing=overwrite_existing)
         print (r'Download Complete: {}\{}'.format(save_dir, fName))
     else:
         print('Download not enabled. Change reallyDownloadTheImage to true to download')
@@ -237,7 +238,7 @@ def call_dl_fxn(perform_download, location_url, save_dir, filename=None):
 
 # download file and save to fs
 # TODO: refactor to use expoential retry activation fxn
-def pl_download(url, savepath, filename=None):
+def pl_download(url, savepath, filename=None, overwrite_existing=False):
     
     # Send a GET request to the provided location url, using your API Key for authentication
     res = requests.get(url, stream=True, auth=(PLANET_API_KEY, ""))
@@ -251,11 +252,15 @@ def pl_download(url, savepath, filename=None):
             filename = url.split("=")[1][:10]
     # Save the file
     # with open('output/' + filename, "wb") as f:
-    with open(os.path.join(savepath, filename), "wb") as f:
-        for chunk in res.iter_content(chunk_size=1024):
-            if chunk: # filter out keep-alive new chunks
-                f.write(chunk)
-                f.flush()
+
+    # check to see if file exists before downloading
+    full_file_path = os.path.join(savepath, filename)
+    if not os.path.exists(full_file_path) or overwrite_existing: 
+        with open(full_file_path, "wb") as f:
+            for chunk in res.iter_content(chunk_size=1024):
+                if chunk: # filter out keep-alive new chunks
+                    f.write(chunk)
+                    f.flush()
 
     return filename
 
@@ -293,13 +298,13 @@ def activate_asset(assets_url, asset):
 # https://developers.planet.com/docs/planetschool/best-practices-for-working-with-large-aois/pagination.py
 # What we want to do with each page of search results
 # in this case, just print out each id
-def handle_page(res, really_download_images):
+def handle_page(res, really_download_images, overwrite_existing=False):
     if isinstance(res, dict):
         json_response = res
     else:
         json_response = res.json()
     # debugging
-    print('JSOn RESPONSE BELOW')
+    print('JSON RESPONSE BELOW')
     p(json_response)
     # end debugging
     features = json_response["features"]
@@ -377,7 +382,7 @@ def handle_page(res, really_download_images):
                 # and here: https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/orders/ordering_and_delivery.ipynb
 
                 # Download the file from an activated asset's location url IF we are actually downloading
-                call_dl_fxn(really_download_images, location_url, save_dir, filename=None)
+                call_dl_fxn(really_download_images, location_url, save_dir, filename=None, overwrite_existing=overwrite_existing)
                 # call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
             elif res.status_code == 202:
                 # exponential wait retry to get the image ready to download  from Planet
@@ -397,7 +402,7 @@ def handle_page(res, really_download_images):
 
                 # with all of that done, we can now dl the image and xml coeff file
                 # (if we are actually downloading and not just testing / iterating through the assets)
-                call_dl_fxn(really_download_images, location_url, save_dir, filename=None)
+                call_dl_fxn(really_download_images, location_url, save_dir, filename=None, overwrite_existing=overwrite_existing)
                 # call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
             else:
                 next
@@ -408,7 +413,7 @@ def handle_page(res, really_download_images):
     print('Processing (downloads) complete (for this page of results). Moving to next page of results (if present)')
     return 
 
-def fetch_page(search_url, really_download_images, search_json = ''):
+def fetch_page(search_url, really_download_images, search_json = '', overwrite_existing=False):
     print('Processing results from {}'.format(search_url))
     if search_json != '':
         p(search_json)
@@ -424,7 +429,7 @@ def fetch_page(search_url, really_download_images, search_json = ''):
     # Print response
     # p(res.json())
 
-    handle_page(res, really_download_images)
+    handle_page(res, really_download_images, overwrite_existing=overwrite_existing)
 
     # fixing TypeError: 'Response' object is not subscriptable on next pages
     try:
@@ -434,7 +439,7 @@ def fetch_page(search_url, really_download_images, search_json = ''):
         next_url = resJSON["_links"].get("_next")
 
     if next_url:
-        fetch_page(next_url, really_download_images) 
+        fetch_page(next_url, really_download_images, overwrite_existing=overwrite_existing) 
     
     print('Finished processing results from {}'.format(search_url))
 
