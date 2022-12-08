@@ -10,6 +10,7 @@ import json
 import geojsonio
 import geopandas
 import rasterio
+import traceback
 
 #%%init class
 # class Planet_Raster_Downloader:
@@ -26,7 +27,7 @@ debug_var = ''
 #%% main code entrypoints
 def get_planet_download_stats(download_save_dir:str, item_types:list, aoi_geojson_geom, 
     asset_type:str, planet_api_key:str, planet_base_url:str, img_start_date:str, 
-    img_end_date:str, cloud_cover_percent_max, *args, **kwargs):
+    img_end_date:str, cloud_cover_percent_max, interval_type, *args, **kwargs):
 
     # set up session object and authenticate
     session = requests.Session()
@@ -36,8 +37,8 @@ def get_planet_download_stats(download_save_dir:str, item_types:list, aoi_geojso
 
     # get individual filters
     geo_filter = get_geom_filter(aoi_geojson_geom)
-    start_date_filter = get_date_filter(img_start_date)
-    end_date_filter = get_date_filter(img_end_date)
+    start_date_filter = get_date_filter('gte', img_start_date)
+    end_date_filter = get_date_filter('lte', img_end_date)
     cloud_filter = get_property_range_filter('cloud_cover', 'lte', cloud_cover_percent_max)
     # combine them into one 'and' filter
     filter_list = [geo_filter, start_date_filter, end_date_filter, cloud_filter]
@@ -49,9 +50,11 @@ def get_planet_download_stats(download_save_dir:str, item_types:list, aoi_geojso
     # Setup the request
     request = {
         "item_types" : item_types,
-        "interval" : "year",
+        "interval" : interval_type,
         "filter" : search_filter
     }
+
+    # print(request)
 
     # Send the POST request to the API stats endpoint
     res=session.post(stats_url, json=request)
@@ -74,8 +77,8 @@ def download_planet_rasters(download_save_dir:str, item_types:str, aoi_geojson_g
 
     # get individual filters
     geo_filter = get_geom_filter(aoi_geojson_geom)
-    start_date_filter = get_date_filter(img_start_date)
-    end_date_filter = get_date_filter(img_end_date)
+    start_date_filter = get_date_filter('gte', img_start_date)
+    end_date_filter = get_date_filter('lte', img_end_date)
     cloud_filter = get_property_range_filter('cloud_cover', 'lte', cloud_cover_percent_max)
     # combine them into one 'and' filter
     filter_list = [geo_filter, start_date_filter, end_date_filter, cloud_filter]
@@ -89,7 +92,7 @@ def download_planet_rasters(download_save_dir:str, item_types:str, aoi_geojson_g
         "filter" : search_filter
     }
 
-    fetch_page(quick_url, really_download_images, session, search_json=request, overwrite_existing=overwrite_existing)
+    fetch_page(quick_url, really_download_images, session, download_save_dir, planet_api_key, search_json=request, overwrite_existing=overwrite_existing)
 
     print('Processing Complete')
 
@@ -248,9 +251,9 @@ def get_combined_search_filter(filter_list):
 def p(data):
     print(json.dumps(data, indent=2))
 
-def call_dl_fxn(perform_download, location_url, save_dir, filename=None, overwrite_existing=False):
+def call_dl_fxn(perform_download, location_url, save_dir, planet_api_key, filename=None, overwrite_existing=False):
     if perform_download:
-        fName = pl_download(location_url, save_dir, overwrite_existing=overwrite_existing)
+        fName = pl_download(location_url, save_dir, planet_api_key, overwrite_existing=overwrite_existing)
         print (r'Download Complete: {}\{}'.format(save_dir, fName))
     else:
         print('Download not enabled. Change reallyDownloadTheImage to true to download')
@@ -259,7 +262,6 @@ def call_dl_fxn(perform_download, location_url, save_dir, filename=None, overwri
 # download file and save to fs
 # TODO: refactor to use expoential retry activation fxn
 def pl_download(url, savepath, planet_api_key, filename=None, overwrite_existing=False):
-    
     # Send a GET request to the provided location url, using your API Key for authentication
     res = requests.get(url, stream=True, auth=(planet_api_key, ""))
     # If no filename argument is given
@@ -289,17 +291,19 @@ Exponential retry fxn (from planet code example at
 https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/toar/toar_planetscope.ipynb
 
 """
-def activate_asset(assets_url, asset, session):
+def activate_asset(asset_activation_url, session):
     asset_activated = False
 
     while asset_activated == False:
         # Send a request to the item's assets url\
-        res = session.get(assets_url)
+        res = session.get(asset_activation_url)
 
         # Assign a variable to the item's assets url response
         assets = res.json()
-
-        asset_status = asset["status"]
+        print('ASSETS PRINT')
+        p(assets)
+        print()
+        asset_status = assets["status"]
         print(asset_status)
 
         # If asset is already active, we are done
@@ -307,8 +311,8 @@ def activate_asset(assets_url, asset, session):
             asset_activated = True
             print("Asset is active and ready to download")
 
-    # Print the ps3b_analytic asset data    
-    return p(asset)
+    # Print the asset data    
+    # return p(asset)
 
 # How to Paginate:
 # 1) Request a page of search results
@@ -318,14 +322,14 @@ def activate_asset(assets_url, asset, session):
 # https://developers.planet.com/docs/planetschool/best-practices-for-working-with-large-aois/pagination.py
 # What we want to do with each page of search results
 # in this case, just print out each id
-def handle_page(res, really_download_images, session, save_dir, overwrite_existing=False):
+def handle_page(res, really_download_images, session, save_dir, planet_api_key, overwrite_existing=False):
     if isinstance(res, dict):
         json_response = res
     else:
         json_response = res.json()
     # debugging
-    print('JSON RESPONSE BELOW')
-    p(json_response)
+    # print('JSON RESPONSE BELOW')
+    # p(json_response)
     # end debugging
     features = json_response["features"]
     # Print the response
@@ -351,7 +355,10 @@ def handle_page(res, really_download_images, session, save_dir, overwrite_existi
         assets = res.json()
 
         # Debugging - see how xml radiance conversion coeff files are named
-        #p(assets)
+        # print()
+        # print('Assets JSON:')
+        # p(assets)
+        # print()
         
         #rad. calibrated img to surface reflectance
         # 4 band, ortho rectified, corrected to BOA reflectance
@@ -360,40 +367,45 @@ def handle_page(res, really_download_images, session, save_dir, overwrite_existi
         # visual = assets["ortho_analytic_8b_sr"] 
         # 4-band radiometrically calibrated, TOA
         try:
-            visual = assets["analytic_sr"]
-            visual_xml = assets["analytic_sr_xml"]
-            orthoanalytic_asset_4b = assets["ortho_analytic_4b"]
-            orthoanalytic_xml_asset_4b = assets["ortho_analytic_4b_xml"]
+            # visual = assets["analytic_sr"]
+            # visual_xml = assets["analytic_sr_xml"]
+            # orthoanalytic_asset_4b = assets["ortho_analytic_4b"]
+            # orthoanalytic_xml_asset_4b = assets["ortho_analytic_4b_xml"]
             orthoanalytic_asset_4b_sr = assets["ortho_analytic_4b_sr"]
             # DONT NEED XML for SR because already REFLECTANCE
             # orthoanalytic_xml_asset_4b_sr = assets["ortho_analytic_4b_sr_xml"]
-            orthoanalytic_asset_8b = assets["ortho_analytic_8b"]
-            orthoanalytic_xml_asset_8b = assets["ortho_analytic_8b_xml"] 
+            # orthoanalytic_asset_8b = assets["ortho_analytic_8b"]
+            # orthoanalytic_xml_asset_8b = assets["ortho_analytic_8b_xml"] 
 
             # Setup the activation url for a particular asset (in this case the visual asset)
-            activation_url_visual = visual["_links"]["activate"]
-            activation_url_visual_xml = visual_xml["_links"]["activate"]
-            activation_url_orthoanalytic_asset_4b = orthoanalytic_asset_4b["_links"]["activate"]
-            activation_url_orthoanalytic_xml_asset_4b = orthoanalytic_xml_asset_4b["_links"]["activate"]
+            # activation_url_visual = visual["_links"]["activate"]
+            # activation_url_visual_xml = visual_xml["_links"]["activate"]
+            # activation_url_orthoanalytic_asset_4b = orthoanalytic_asset_4b["_links"]["activate"]
+            # activation_url_orthoanalytic_xml_asset_4b = orthoanalytic_xml_asset_4b["_links"]["activate"]
             activation_url_orthoanalytic_asset_4b_sr = orthoanalytic_asset_4b_sr["_links"]["activate"]
-            activation_url_orthoanalytic_asset_8b = orthoanalytic_asset_8b["_links"]["activate"]
-            activation_url_orthoanalytic_xml_asset_8b = orthoanalytic_xml_asset_8b["_links"]["activate"]
+            # activation_url_orthoanalytic_asset_8b = orthoanalytic_asset_8b["_links"]["activate"]
+            # activation_url_orthoanalytic_xml_asset_8b = orthoanalytic_xml_asset_8b["_links"]["activate"]
             
             # Send a request to the activation url to activate the item and
             # its radiance to reflectance conversion coefficients xml file
+            print('Attempting to activate: {}'.format(activation_url_orthoanalytic_asset_4b_sr))
             res = session.get(activation_url_orthoanalytic_asset_4b_sr)
             # res_xml = session.get(activation_url_orthoanalytic_asset_4b_sr)
             # TODO: Implement dl for 8band and XML files
 
             # Print the response from the activation request
-            p(res.status_code) # 204 if ready        
+            print()
+            print('Activation Result Code:')
+            p(res.status_code) # 204 if ready   
+            print()     
 
             #TODO write exponential retry code to attempt to dl images that aren't ready
             
             if res.status_code == 204:
                 # ** DOWNLOAD ONCE ASSET IS ACTIVE (RESPONSE CODE 204)
                 # Assign a variable to the visual asset's location endpoint
-                location_url = activation_url_orthoanalytic_asset_4b_sr["location"]
+                location_url = orthoanalytic_asset_4b_sr["location"]
+                # print('Location URL: {}'.format(location_url))
                 # location_url_xml = orthoanalytic_xml_asset_8b["location"]
 
                 # TODO: alter url to specify that images should be sent to google cloud
@@ -402,7 +414,7 @@ def handle_page(res, really_download_images, session, save_dir, overwrite_existi
                 # and here: https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/orders/ordering_and_delivery.ipynb
 
                 # Download the file from an activated asset's location url IF we are actually downloading
-                call_dl_fxn(really_download_images, location_url, save_dir, filename=None, overwrite_existing=overwrite_existing)
+                call_dl_fxn(really_download_images, location_url, save_dir, planet_api_key, filename=None, overwrite_existing=overwrite_existing)
                 # call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
             elif res.status_code == 202:
                 # exponential wait retry to get the image ready to download  from Planet
@@ -410,7 +422,7 @@ def handle_page(res, really_download_images, session, save_dir, overwrite_existi
                 # subsequent downloads until image is ready and downloaded;
                 # may need to refactor this to allow continued/paralled dl calls while waiting
                 # for image activation if this causes delays
-                activate_asset(assets_url, activation_url_orthoanalytic_asset_4b_sr)
+                activate_asset(activation_url_orthoanalytic_asset_4b_sr, session)
                 # activate_asset(assets_url, orthoanalytic_xml_asset_8b)
                 # Download the file from an activated asset's location url if flag set to do
                 # otherwise, show msg saying not dl'd and show image name
@@ -422,18 +434,19 @@ def handle_page(res, really_download_images, session, save_dir, overwrite_existi
 
                 # with all of that done, we can now dl the image and xml coeff file
                 # (if we are actually downloading and not just testing / iterating through the assets)
-                call_dl_fxn(really_download_images, location_url, save_dir, filename=None, overwrite_existing=overwrite_existing)
+                call_dl_fxn(really_download_images, location_url, save_dir, planet_api_key, filename=None, overwrite_existing=overwrite_existing)
                 # call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
             else:
                 next
         except Exception as e:
             print('Error downloading (or activating){}'.format(f['_links']))
-            print('EXCEPTION: {}'.format(e))
+            traceback.print_exc()
+            print('EXCEPTION: {}'.format(repr(e)))            
         next
     print('Processing (downloads) complete (for this page of results). Moving to next page of results (if present)')
     return 
 
-def fetch_page(search_url, really_download_images, session, search_json = '', overwrite_existing=False):
+def fetch_page(search_url, really_download_images, session, save_dir, planet_api_key, search_json = '', overwrite_existing=False):
     print('Processing results from {}'.format(search_url))
     if search_json != '':
         p(search_json)
@@ -449,7 +462,7 @@ def fetch_page(search_url, really_download_images, session, search_json = '', ov
     # Print response
     # p(res.json())
 
-    handle_page(res, really_download_images, session, overwrite_existing=overwrite_existing)
+    handle_page(res, really_download_images, session, save_dir, planet_api_key, overwrite_existing=overwrite_existing)
 
     # fixing TypeError: 'Response' object is not subscriptable on next pages
     try:
@@ -458,8 +471,10 @@ def fetch_page(search_url, really_download_images, session, search_json = '', ov
         resJSON = res.json()
         next_url = resJSON["_links"].get("_next")
 
+        traceback.print_exc()
+
     if next_url:
-        fetch_page(next_url, really_download_images, session, overwrite_existing=overwrite_existing) 
+        fetch_page(next_url, really_download_images, session, save_dir, planet_api_key, overwrite_existing=overwrite_existing) 
     
     print('Finished processing results from {}'.format(search_url))
 
