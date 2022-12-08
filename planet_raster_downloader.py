@@ -11,6 +11,14 @@ import geojsonio
 import geopandas
 import rasterio
 
+#%%init class
+# class Planet_Raster_Downloader:
+#     def __init__(self, PLANET_API_KEY):
+#         SESSION = requests.Session()
+
+#         #authenticate session with user name and password, pass in an empty string for the password
+#         SESSION.auth = (PLANET_API_KEY, "")
+
 #%% DEBUGGING
 # use this var to get values from within fxns for ts'ing
 debug_var = ''
@@ -19,6 +27,12 @@ debug_var = ''
 def get_planet_download_stats(download_save_dir:str, item_types:list, aoi_geojson_geom, 
     asset_type:str, planet_api_key:str, planet_base_url:str, img_start_date:str, 
     img_end_date:str, cloud_cover_percent_max, *args, **kwargs):
+
+    # set up session object and authenticate
+    session = requests.Session()
+
+    #authenticate session with user name and password, pass in an empty string for the password
+    session.auth = (planet_api_key, "")
 
     # get individual filters
     geo_filter = get_geom_filter(aoi_geojson_geom)
@@ -52,6 +66,12 @@ def download_planet_rasters(download_save_dir:str, item_types:str, aoi_geojson_g
     img_end_date:str, cloud_cover_percent_max, really_download_images = False, 
     overwrite_existing = False, *args, **kwargs):
 
+    # set up session object and authenticate
+    session = requests.Session()
+
+    #authenticate session with user name and password, pass in an empty string for the password
+    session.auth = (planet_api_key, "")
+
     # get individual filters
     geo_filter = get_geom_filter(aoi_geojson_geom)
     start_date_filter = get_date_filter(img_start_date)
@@ -61,7 +81,7 @@ def download_planet_rasters(download_save_dir:str, item_types:str, aoi_geojson_g
     filter_list = [geo_filter, start_date_filter, end_date_filter, cloud_filter]
     search_filter = get_combined_search_filter(filter_list)
 
-    quick_url = "{}/quick-search".format(BASE_URL)
+    quick_url = "{}/quick-search".format(planet_base_url)
 
     # make new request to the data api
     request = {
@@ -69,14 +89,14 @@ def download_planet_rasters(download_save_dir:str, item_types:str, aoi_geojson_g
         "filter" : search_filter
     }
 
-    fetch_page(quick_url, really_download_images, search_json=request, overwrite_existing=overwrite_existing)
+    fetch_page(quick_url, really_download_images, session, search_json=request, overwrite_existing=overwrite_existing)
 
     print('Processing Complete')
 
     return
 
 #%% utility methods
-def get_geom_filter(geojson):
+def get_geom_filter(geom):
     geometry_filter = {
         "type": "GeometryFilter",
         "field_name": "geometry",
@@ -102,11 +122,11 @@ def get_date_filter(conditional_type, date_string):
 
 """
 ex: cloud_cover_filter = {
-  "type": "RangeFilter",
-  "field_name": "cloud_cover",
-  "config": {
+"type": "RangeFilter",
+"field_name": "cloud_cover",
+"config": {
     "lte": 0.6
-  }
+}
 }
 """
 def get_property_range_filter(field_name, conditional_type, property_value):
@@ -128,9 +148,9 @@ def get_combined_search_filter(filter_list):
 
     return filter
 #%% setup global vars   
-PLANET_API_KEY = p_creds.get_planet_api_key()
-BASE_URL = "https://api.planet.com/data/v1"
-save_dir = r'C:\Users\P\Pictures\PythonTestDownloads'
+# PLANET_API_KEY = p_creds.get_planet_api_key()
+# BASE_URL = "https://api.planet.com/data/v1"
+# save_dir = r'C:\Users\P\Pictures\PythonTestDownloads'
 
 # %%
 # Search for imagery from our test fields on Cornell's campus
@@ -140,87 +160,87 @@ save_dir = r'C:\Users\P\Pictures\PythonTestDownloads'
 # field and pull down Planet rasters
 # TODO: check to see if the  file DNE locally before downloading (via the file's name vs 
 # Planet files already downloaded)
-geom = {
-    "type": "Polygon",
-        "coordinates": [
-          [
-            [
-              -76.460702419281,
-              42.450694723657
-            ],
-            [
-              -76.46080970764159,
-              42.44592889231982
-            ],
-            [
-              -76.45516633987427,
-              42.445723050904434
-            ],
-            [
-              -76.45465135574341,
-              42.45056806173387
-            ],
-            [
-              -76.460702419281,
-              42.450694723657
-            ]
-          ]
-        ]
-}
+# geom = {
+#     "type": "Polygon",
+#         "coordinates": [
+#           [
+#             [
+#               -76.460702419281,
+#               42.450694723657
+#             ],
+#             [
+#               -76.46080970764159,
+#               42.44592889231982
+#             ],
+#             [
+#               -76.45516633987427,
+#               42.445723050904434
+#             ],
+#             [
+#               -76.45465135574341,
+#               42.45056806173387
+#             ],
+#             [
+#               -76.460702419281,
+#               42.450694723657
+#             ]
+#           ]
+#         ]
+# }
 
-# Setup Geometry Filter
-geometry_filter = {
-    "type": "GeometryFilter",
-    "field_name": "geometry",
-    "config": geom
-}
+# # Setup Geometry Filter
+# geometry_filter = {
+#     "type": "GeometryFilter",
+#     "field_name": "geometry",
+#     "config": geom
+# }
 
-# Setup Date Filter
-date_filter_start = {
-    "type": "DateRangeFilter", # Type of filter -> Date Range
-    "field_name": "acquired", # The field to filter on: "acquired" -> Date on which the "image was taken"
-    "config": {
-        "gte": "2021-06-13T00:00:00.000Z", # "gte" -> Greater than or equal to
-    }
-}
-date_filter_end = {
-    "type": "DateRangeFilter", # Type of filter -> Date Range
-    "field_name": "acquired", # The field to filter on: "acquired" -> Date on which the "image was taken"
-    "config": {
-        "lte": "2021-11-05T00:00:00.000Z", # "lte" -> less than or equal to
-    }
-}
+# # Setup Date Filter
+# date_filter_start = {
+#     "type": "DateRangeFilter", # Type of filter -> Date Range
+#     "field_name": "acquired", # The field to filter on: "acquired" -> Date on which the "image was taken"
+#     "config": {
+#         "gte": "2021-06-13T00:00:00.000Z", # "gte" -> Greater than or equal to
+#     }
+# }
+# date_filter_end = {
+#     "type": "DateRangeFilter", # Type of filter -> Date Range
+#     "field_name": "acquired", # The field to filter on: "acquired" -> Date on which the "image was taken"
+#     "config": {
+#         "lte": "2021-11-05T00:00:00.000Z", # "lte" -> less than or equal to
+#     }
+# }
 
-# filter any images which are more than nn% clouds
-cloud_cover_filter = {
-  "type": "RangeFilter",
-  "field_name": "cloud_cover",
-  "config": {
-    "lte": 0.6
-  }
-}
+# # filter any images which are more than nn% clouds
+# cloud_cover_filter = {
+#   "type": "RangeFilter",
+#   "field_name": "cloud_cover",
+#   "config": {
+#     "lte": 0.6
+#   }
+# }
 
-# Setup an "AND" logical filter
-and_filter = {
-    "type": "AndFilter",
-    "config": [geometry_filter, date_filter_start, date_filter_end, cloud_cover_filter]
-}
+# # Setup an "AND" logical filter
+# and_filter = {
+#     "type": "AndFilter",
+#     "config": [geometry_filter, date_filter_start, date_filter_end, cloud_cover_filter]
+# }
 
 # sanity check
 # Print the logical filter
 # p(and_filter)
 
 #%% set up session
-session = requests.Session()
+# session = requests.Session()
 
-#authenticate session with user name and password, pass in an empty string for the password
-session.auth = (PLANET_API_KEY, "")
+# #authenticate session with user name and password, pass in an empty string for the password
+# session.auth = (PLANET_API_KEY, "")
 
-#make a get request to the Data API to verify if working
-res = session.get(BASE_URL)
+# #make a get request to the Data API to verify if working
+# res = session.get(BASE_URL)
 
-# print response (should be 200 if good)
-print(res.status_code)
+# # print response (should be 200 if good)
+# print(res.status_code)
 
 
 # %% FUNC DEFS
@@ -238,10 +258,10 @@ def call_dl_fxn(perform_download, location_url, save_dir, filename=None, overwri
 
 # download file and save to fs
 # TODO: refactor to use expoential retry activation fxn
-def pl_download(url, savepath, filename=None, overwrite_existing=False):
+def pl_download(url, savepath, planet_api_key, filename=None, overwrite_existing=False):
     
     # Send a GET request to the provided location url, using your API Key for authentication
-    res = requests.get(url, stream=True, auth=(PLANET_API_KEY, ""))
+    res = requests.get(url, stream=True, auth=(planet_api_key, ""))
     # If no filename argument is given
     if not filename:
         # Construct a filename from the API response
@@ -269,11 +289,11 @@ Exponential retry fxn (from planet code example at
 https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/toar/toar_planetscope.ipynb
 
 """
-def activate_asset(assets_url, asset):
+def activate_asset(assets_url, asset, session):
     asset_activated = False
 
     while asset_activated == False:
-        # Send a request to the item's assets url
+        # Send a request to the item's assets url\
         res = session.get(assets_url)
 
         # Assign a variable to the item's assets url response
@@ -298,7 +318,7 @@ def activate_asset(assets_url, asset):
 # https://developers.planet.com/docs/planetschool/best-practices-for-working-with-large-aois/pagination.py
 # What we want to do with each page of search results
 # in this case, just print out each id
-def handle_page(res, really_download_images, overwrite_existing=False):
+def handle_page(res, really_download_images, session, save_dir, overwrite_existing=False):
     if isinstance(res, dict):
         json_response = res
     else:
@@ -413,7 +433,7 @@ def handle_page(res, really_download_images, overwrite_existing=False):
     print('Processing (downloads) complete (for this page of results). Moving to next page of results (if present)')
     return 
 
-def fetch_page(search_url, really_download_images, search_json = '', overwrite_existing=False):
+def fetch_page(search_url, really_download_images, session, search_json = '', overwrite_existing=False):
     print('Processing results from {}'.format(search_url))
     if search_json != '':
         p(search_json)
@@ -429,7 +449,7 @@ def fetch_page(search_url, really_download_images, search_json = '', overwrite_e
     # Print response
     # p(res.json())
 
-    handle_page(res, really_download_images, overwrite_existing=overwrite_existing)
+    handle_page(res, really_download_images, session, overwrite_existing=overwrite_existing)
 
     # fixing TypeError: 'Response' object is not subscriptable on next pages
     try:
@@ -439,7 +459,7 @@ def fetch_page(search_url, really_download_images, search_json = '', overwrite_e
         next_url = resJSON["_links"].get("_next")
 
     if next_url:
-        fetch_page(next_url, really_download_images, overwrite_existing=overwrite_existing) 
+        fetch_page(next_url, really_download_images, session, overwrite_existing=overwrite_existing) 
     
     print('Finished processing results from {}'.format(search_url))
 
@@ -448,44 +468,44 @@ def fetch_page(search_url, really_download_images, search_json = '', overwrite_e
 # The /stats endpoint provides a summary of the available data based on some search criteria.
 # https://api.planet.com/data/v1/stats
 # Setup the stats URL
-stats_url = "{}/stats".format(BASE_URL)
+# stats_url = "{}/stats".format(BASE_URL)
 
-#specify item types to pull
-# PSScene4Band and PSScene documentation links:
-# https://developers.planet.com/docs/data/psscene4band/
-# https://developers.planet.com/docs/data/psscene/
-# item_types = ["PSScene4Band", "PSScene"] #maybe also include to PSScene (which is up to 8band)
-item_types = ["PSScene"]
+# #specify item types to pull
+# # PSScene4Band and PSScene documentation links:
+# # https://developers.planet.com/docs/data/psscene4band/
+# # https://developers.planet.com/docs/data/psscene/
+# # item_types = ["PSScene4Band", "PSScene"] #maybe also include to PSScene (which is up to 8band)
 # item_types = ["PSScene"]
-# TODO: verify that PSScene4Band is coming from AnalyticSR or analytic_8b_sr_udm2
-#  bundle (calibrated, BOA), should be, but verify this
+# # item_types = ["PSScene"]
+# # TODO: verify that PSScene4Band is coming from AnalyticSR or analytic_8b_sr_udm2
+# #  bundle (calibrated, BOA), should be, but verify this
 
-# Setup the request
-request = {
-    "item_types" : item_types,
-    "interval" : "year",
-    "filter" : and_filter
-}
+# # Setup the request
+# request = {
+#     "item_types" : item_types,
+#     "interval" : "year",
+#     "filter" : and_filter
+# }
 
-# Send the POST request to the API stats endpoint
-#res=session.post(stats_url, json=request)
+# # Send the POST request to the API stats endpoint
+# #res=session.post(stats_url, json=request)
 
-# sanity check 
-# Print response
-p(res.json())
+# # sanity check 
+# # Print response
+# p(res.json())
 
 #%%
 # Setup the quick search endpoint url to search for imagery meeting xyz criteria
-quick_url = "{}/quick-search".format(BASE_URL)
+# quick_url = "{}/quick-search".format(BASE_URL)
 
-# make new request to the data api
-request = {
-    "item_types" : item_types,
-    "filter" : and_filter
-}
+# # make new request to the data api
+# request = {
+#     "item_types" : item_types,
+#     "filter" : and_filter
+# }
 
 #%% new process flow - get page then pass to fetch_page to allow for pagination
-fetch_page(quick_url, search_json=request)
+# fetch_page(quick_url, search_json=request)
 
-print('Processing Complete')
+# print('Processing Complete')
 
