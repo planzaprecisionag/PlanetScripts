@@ -13,7 +13,9 @@ planet_api_key = plc.get_planet_api_key()
 planet_base_url = "https://api.planet.com/data/v1"
 img_start_date_string = "2022-04-01T00:00:00.000Z"
 img_end_date_string = "2022-10-31T00:00:00.000Z"
-cloud_cover_percent_max = 0.8
+# see https://developers.planet.com/docs/data/psscene/ for property filters
+# cloud_cover_percent_max = 0.8
+clear_percent = 30 #% of area not impacted by cloud, haze, shadow, or snow
 interval_type = 'day'
 
 # root dir holding field boundary polygons. will loop through this and pull
@@ -34,7 +36,7 @@ for f in os.listdir(field_aoi_dir):
         if is_first_file:
             get_planet_download_stats(download_save_dir, item_types, field_aoi, 
                 asset_type, planet_api_key, planet_base_url, img_start_date_string,
-                img_end_date_string, cloud_cover_percent_max, interval_type)
+                img_end_date_string, clear_percent, interval_type)
             is_first_file = False
 
 #%% DOWNLOAD IMAGERY
@@ -53,7 +55,7 @@ for f in os.listdir(field_aoi_dir):
         if is_first_field:
             download_planet_rasters(download_save_dir, item_types, field_aoi, 
                 asset_type, planet_api_key, planet_base_url, img_start_date_string,
-                img_end_date_string, cloud_cover_percent_max, really_download_images=True, 
+                img_end_date_string, clear_percent, really_download_images=True, 
                 overwrite_existing=False)
             # print('should only see this once')
             is_first_field = False
@@ -65,7 +67,7 @@ from planet_raster_downloader import get_combined_search_filter, get_date_filter
 startf = get_date_filter('lte', img_end_date_string)
 endf = get_date_filter('gte', img_start_date_string)
 geof = get_geom_filter(field_aoi)
-cloudf = get_property_range_filter('cloud_cover', 'lte', cloud_cover_percent_max)
+cloudf = get_property_range_filter('cloud_cover', 'lte', clear_percent)
 allf = [startf, endf, geof, cloudf]
 combinedf = get_combined_search_filter(allf)
 

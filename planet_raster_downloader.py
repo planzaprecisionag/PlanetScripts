@@ -27,7 +27,7 @@ debug_var = ''
 #%% main code entrypoints
 def get_planet_download_stats(download_save_dir:str, item_types:list, aoi_geojson_geom, 
     asset_type:str, planet_api_key:str, planet_base_url:str, img_start_date:str, 
-    img_end_date:str, cloud_cover_percent_max, interval_type, *args, **kwargs):
+    img_end_date:str, clear_percent, interval_type, *args, **kwargs):
 
     # set up session object and authenticate
     session = requests.Session()
@@ -39,7 +39,7 @@ def get_planet_download_stats(download_save_dir:str, item_types:list, aoi_geojso
     geo_filter = get_geom_filter(aoi_geojson_geom)
     start_date_filter = get_date_filter('gte', img_start_date)
     end_date_filter = get_date_filter('lte', img_end_date)
-    cloud_filter = get_property_range_filter('cloud_cover', 'lte', cloud_cover_percent_max)
+    cloud_filter = get_property_range_filter('clear_percent', 'gte', clear_percent)
     # combine them into one 'and' filter
     filter_list = [geo_filter, start_date_filter, end_date_filter, cloud_filter]
     search_filter = get_combined_search_filter(filter_list)
@@ -66,7 +66,7 @@ def get_planet_download_stats(download_save_dir:str, item_types:list, aoi_geojso
 
 def download_planet_rasters(download_save_dir:str, item_types:str, aoi_geojson_geom, 
     asset_type:str, planet_api_key:str, planet_base_url:str, img_start_date:str, 
-    img_end_date:str, cloud_cover_percent_max, really_download_images = False, 
+    img_end_date:str, clear_percent, really_download_images = False, 
     overwrite_existing = False, *args, **kwargs):
 
     # set up session object and authenticate
@@ -79,7 +79,7 @@ def download_planet_rasters(download_save_dir:str, item_types:str, aoi_geojson_g
     geo_filter = get_geom_filter(aoi_geojson_geom)
     start_date_filter = get_date_filter('gte', img_start_date)
     end_date_filter = get_date_filter('lte', img_end_date)
-    cloud_filter = get_property_range_filter('cloud_cover', 'lte', cloud_cover_percent_max)
+    cloud_filter = get_property_range_filter('clear_percent', 'gte', clear_percent)
     # combine them into one 'and' filter
     filter_list = [geo_filter, start_date_filter, end_date_filter, cloud_filter]
     search_filter = get_combined_search_filter(filter_list)
