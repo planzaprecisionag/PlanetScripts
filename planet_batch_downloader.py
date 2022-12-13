@@ -16,7 +16,7 @@ img_end_date_string = "2022-10-31T00:00:00.000Z"
 # see https://developers.planet.com/docs/data/psscene/ for property filters
 # cloud_cover_percent_max = 0.8
 clear_percent = 30 #% of area not impacted by cloud, haze, shadow, or snow
-interval_type = 'day'
+interval_type = 'year'
 
 # root dir holding field boundary polygons. will loop through this and pull
 # planet rasters using these as AOI's
@@ -72,4 +72,28 @@ allf = [startf, endf, geof, cloudf]
 combinedf = get_combined_search_filter(allf)
 
 print(allf)
+
+# %% Debugging activate
+import requests
+import planet_credentials as plc
+import json
+def p(data):
+    print(json.dumps(data, indent=2))
+# set up session object and authenticate
+
+session = requests.Session()
+asset_activation_url = 'https://api.planet.com/data/v1/assets/eyJpIjogIjIwMjIxMDIzXzE1MzAxNV8wMl8yNDlhIiwgImMiOiAiUFNTY2VuZSIsICJ0IjogIm9ydGhvX2FuYWx5dGljXzRiX3NyIiwgImN0IjogIml0ZW0tdHlwZSJ9/activate'
+#authenticate session with user name and password, pass in an empty string for the password
+planet_api_key = plc.get_planet_api_key()
+session.auth = (planet_api_key, "")
+res = session.get(asset_activation_url)
+
+assets = res.json()
+print('ASSETS PRINT')
+p(assets)
+print()
+asset_status = assets["status"]
+print(asset_status)
+
+
 # %%
