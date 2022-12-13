@@ -11,6 +11,8 @@ import geojsonio
 import geopandas
 import rasterio
 import traceback
+import time
+import datetime
 
 #%%init class
 # class Planet_Raster_Downloader:
@@ -283,6 +285,8 @@ def pl_download(url, savepath, planet_api_key, filename=None, overwrite_existing
                 if chunk: # filter out keep-alive new chunks
                     f.write(chunk)
                     f.flush()
+    else:
+        print('File already downloaded, skipping')
 
     return filename
 
@@ -293,27 +297,35 @@ https://github.com/planetlabs/notebooks/blob/master/jupyter-notebooks/toar/toar_
 """
 def activate_asset(asset_activation_url, session):
     asset_activated = False
-
+    # debugging
+    # print('Hitting activate_asset ln 297')
+    i = 1
+    x = 2
     while asset_activated == False:
         # Send a request to the item's assets url\
         res = session.get(asset_activation_url)
+        status_code = res.status_code
+        print('Status Code: {}'.format(status_code))
 
-        # Assign a variable to the item's assets url response
-        assets = res.json()
-        print('ASSETS PRINT')
-        p(assets)
-        print()
-        asset_status = assets["status"]
-        print(asset_status)
-
-        # If asset is already active, we are done
-        if asset_status == 'active':
+        if status_code == 204:
             asset_activated = True
             print("Asset is active and ready to download")
-
-    # Print the asset data    
-    # return p(asset)
-
+            return True
+        else: # exponentialish retry delay
+            if i < 10:
+                print('Waiting {} seconds before rechecking asset status'.format(str(x)))
+                print('Activation URL: {}'.format(asset_activation_url))
+                print()
+                time.sleep(x)
+                x = x * 2
+            else:
+                print('Activation is taking too long. Maybe due to a bug in the script, maybe not. Moving on to activate other assets in the queue. Rerun the download script in 30 minutes or so to retry downloading remaining assets.')
+                print()
+                print()
+                break
+        i = i + 1
+    
+    return False
 # How to Paginate:
 # 1) Request a page of search results
 # 2) do something with the page of results
@@ -339,8 +351,10 @@ def handle_page(res, really_download_images, session, save_dir, planet_api_key, 
     feature_count = len(features)
     # Get the number of features present in the response
     print('Features present: {}'.format(feature_count))
-
+    print('HANDLE PAGE START TIME: {}'.format(datetime.datetime.now()))
+    i = 1
     for f in features:
+        print('Starting asset {} at {}'.format(str(i), datetime.datetime.now()))
         # show cloud coverage %
         # print('Percent Cloud Coverage:')
         # p(f['properties']['cloud_percent'])
@@ -422,34 +436,51 @@ def handle_page(res, really_download_images, session, save_dir, planet_api_key, 
                 # subsequent downloads until image is ready and downloaded;
                 # may need to refactor this to allow continued/paralled dl calls while waiting
                 # for image activation if this causes delays
-                activate_asset(activation_url_orthoanalytic_asset_4b_sr, session)
+                # print('Before Activate_Asset Call ln 425: activation URL{}'.format(activation_url_orthoanalytic_asset_4b_sr)) 
+                is_activated = activate_asset(activation_url_orthoanalytic_asset_4b_sr, session)
                 # activate_asset(assets_url, orthoanalytic_xml_asset_8b)
                 # Download the file from an activated asset's location url if flag set to do
                 # otherwise, show msg saying not dl'd and show image name
 
                 # NOTE: lcoation key node not present until asset ready for dl, so must get it here
                 # once asset activation is complete
-                location_url = activation_url_orthoanalytic_asset_4b_sr["location"]
-                # location_url_xml = orthoanalytic_xml_asset_8b["location"]
+                if is_activated:
+                    # REQUERY API to get location key once asset is activated
+                    res2 = session.get(assets_url)
+                    # Assign a variable to the response
+                    assets2 = res2.json()
+                    p(assets2)
+                    orthoanalytic_asset_4b_sr2 = assets2["ortho_analytic_4b_sr"]
+                    # p(orthoanalytic_asset_4b_sr2)
+                    location_url2 = orthoanalytic_asset_4b_sr2["location"]
+                    # location_url_xml = orthoanalytic_xml_asset_8b["location"]
 
-                # with all of that done, we can now dl the image and xml coeff file
-                # (if we are actually downloading and not just testing / iterating through the assets)
-                call_dl_fxn(really_download_images, location_url, save_dir, planet_api_key, filename=None, overwrite_existing=overwrite_existing)
-                # call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
+                    # with all of that done, we can now dl the image and xml coeff file
+                    # (if we are actually downloading and not just testing / iterating through the assets)
+                    call_dl_fxn(really_download_images, location_url2, save_dir, planet_api_key, filename=None, overwrite_existing=overwrite_existing)
+                    # call_dl_fxn(reallyDownloadTheImage, location_url_xml, save_dir, filename=None)
+                else:
+                    print("ASSET SKIPPED; RERUN SCRIPT IN A FEW MINUTES")
+                    print()
             else:
                 next
         except Exception as e:
             print('Error downloading (or activating){}'.format(f['_links']))
             traceback.print_exc()
-            print('EXCEPTION: {}'.format(repr(e)))            
+            print('EXCEPTION: {}'.format(repr(e)))    
+        # increment current asset counter    
+        print('Finished asset # {} at {}'.format(str(i), datetime.datetime.now()))
+        print()
+        i = i + 1
         next
+    print('END TIME: {}'.format(datetime.datetime.now()))
     print('Processing (downloads) complete (for this page of results). Moving to next page of results (if present)')
     return 
 
 def fetch_page(search_url, really_download_images, session, save_dir, planet_api_key, search_json = '', overwrite_existing=False):
     print('Processing results from {}'.format(search_url))
     if search_json != '':
-        p(search_json)
+        # p(search_json)
         # NOTE: MUST do json=... to avoid missing post body error msg when posting like below
         res = session.post(search_url, json=search_json)
     else:
@@ -457,7 +488,7 @@ def fetch_page(search_url, really_download_images, session, save_dir, planet_api
         res = session.get(search_url).json()
 
         #debugging:
-        debug_var = res
+        # debug_var = res
     # sanity check 
     # Print response
     # p(res.json())
