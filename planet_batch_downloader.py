@@ -1,6 +1,6 @@
 #%% Library imports
 import os
-from planet_raster_downloader import get_planet_download_stats, download_planet_rasters
+from planet_raster_downloader import get_planet_download_stats, download_planet_rasters, search_planet
 import planet_credentials as plc
 import planet_json_utils as pju
 
@@ -12,7 +12,8 @@ asset_type = 'ortho_analytic_4b_sr'
 planet_api_key = plc.get_planet_api_key()
 planet_base_url = "https://api.planet.com/data/v1"
 img_start_date_string = "2022-04-01T00:00:00.000Z"
-img_end_date_string = "2022-10-31T00:00:00.000Z"
+# img_end_date_string = "2022-10-31T00:00:00.000Z"
+img_end_date_string = "2022-04-07T00:00:00.000Z"
 # see https://developers.planet.com/docs/data/psscene/ for property filters
 # cloud_cover_percent_max = 0.8
 clear_percent = 30 #% of area not impacted by cloud, haze, shadow, or snow
@@ -38,6 +39,30 @@ for f in os.listdir(field_aoi_dir):
                 asset_type, planet_api_key, planet_base_url, img_start_date_string,
                 img_end_date_string, clear_percent, interval_type)
             is_first_file = False
+
+#%% SEARCH AND SHOW RESULTS RESPONSE 
+# TODO: eventaully return list of asset id's that will be sent to the order
+# and clip api's to download the clipped imagery that way, replacing the 
+# planet_raster_downloader fxn
+print('Be sure that AOI polygons are epsg:4326, NOT a projected CRS')
+# TESTING - only process one field for now
+print('TEST MODE: ONLY PROCESSING ONE FIELD')
+is_first_field = True
+for f in os.listdir(field_aoi_dir):
+    aoi_file = os.path.join(field_aoi_dir, f)
+    # print('AOI File: {}'.format(aoi_file))
+    if os.path.isfile(aoi_file) and f.endswith('.geojson'):
+        # print(f)
+        field_aoi = pju.extract_geometry_from_geojson_file(aoi_file)
+        # print(field_aoi)
+        if is_first_field:
+            feature_ids = search_planet(item_types, field_aoi, 
+                asset_type, planet_api_key, planet_base_url, img_start_date_string,
+                img_end_date_string, clear_percent)
+            # print('should only see this once')
+            is_first_field = False
+
+            print(feature_ids)
 
 #%% DOWNLOAD IMAGERY
 # loop through all field aoi polygon files in aoi dir

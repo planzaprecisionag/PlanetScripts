@@ -42,8 +42,9 @@ def get_planet_download_stats(download_save_dir:str, item_types:list, aoi_geojso
     start_date_filter = get_date_filter('gte', img_start_date)
     end_date_filter = get_date_filter('lte', img_end_date)
     cloud_filter = get_property_range_filter('clear_percent', 'gte', clear_percent)
+    asset_filter = get_asset_filter(asset_type)
     # combine them into one 'and' filter
-    filter_list = [geo_filter, start_date_filter, end_date_filter, cloud_filter]
+    filter_list = [geo_filter, start_date_filter, end_date_filter, asset_filter, cloud_filter]
     search_filter = get_combined_search_filter(filter_list)
 
     stats_url = "{}/stats".format(planet_base_url)
@@ -65,6 +66,41 @@ def get_planet_download_stats(download_save_dir:str, item_types:list, aoi_geojso
     # Print response
     p(res.json())
 
+def search_planet(item_types:str, aoi_geojson_geom, 
+    asset_type:str, planet_api_key:str, planet_base_url:str, img_start_date:str, 
+    img_end_date:str, clear_percent, *args, **kwargs):
+
+    # set up session object and authenticate
+    session = requests.Session()
+
+    #authenticate session with user name and password, pass in an empty string for the password
+    session.auth = (planet_api_key, "")
+
+    # get individual filters
+    geo_filter = get_geom_filter(aoi_geojson_geom)
+    start_date_filter = get_date_filter('gte', img_start_date)
+    end_date_filter = get_date_filter('lte', img_end_date)
+    cloud_filter = get_property_range_filter('clear_percent', 'gte', clear_percent)
+    asset_filter = get_asset_filter(asset_type)
+    # combine them into one 'and' filter
+    filter_list = [geo_filter, start_date_filter, end_date_filter, asset_filter, cloud_filter]
+    search_filter = get_combined_search_filter(filter_list)
+    # print('********* SEarch filter *******************')
+    # p(search_filter)
+    quick_url = "{}/quick-search".format(planet_base_url)
+
+    # make new request to the data api
+    request = {
+        "item_types" : item_types,
+        "filter" : search_filter
+    }
+
+    feature_ids = fetch_search_page(quick_url, session, planet_api_key, search_json=request)
+
+    print('Processing Complete')
+
+    return feature_ids
+
 
 def download_planet_rasters(download_save_dir:str, item_types:str, aoi_geojson_geom, 
     asset_type:str, planet_api_key:str, planet_base_url:str, img_start_date:str, 
@@ -82,8 +118,9 @@ def download_planet_rasters(download_save_dir:str, item_types:str, aoi_geojson_g
     start_date_filter = get_date_filter('gte', img_start_date)
     end_date_filter = get_date_filter('lte', img_end_date)
     cloud_filter = get_property_range_filter('clear_percent', 'gte', clear_percent)
+    asset_filter = get_asset_filter(asset_type)
     # combine them into one 'and' filter
-    filter_list = [geo_filter, start_date_filter, end_date_filter, cloud_filter]
+    filter_list = [geo_filter, start_date_filter, end_date_filter, asset_filter, cloud_filter]
     search_filter = get_combined_search_filter(filter_list)
 
     quick_url = "{}/quick-search".format(planet_base_url)
@@ -110,6 +147,15 @@ def get_geom_filter(geom):
 
     return geometry_filter
 
+def get_asset_filter(asset_type):
+    asset_filter = {
+        "type": "AssetFilter",
+        "config":[
+            asset_type
+        ]
+    }
+
+    return asset_filter
 """
 conditional_type examples: get, lte
 date_string example: 2021-06-13T00:00:00.000Z
@@ -326,6 +372,43 @@ def activate_asset(asset_activation_url, session):
         i = i + 1
     
     return False
+
+def handle_search_page(res, session):
+    if isinstance(res, dict):
+        json_response = res
+    else:
+        json_response = res.json()
+
+    features = json_response["features"]
+    #store # of features returned
+    feature_count = len(features)
+    print('Features present: {}'.format(feature_count))
+    print('HANDLE PAGE START TIME: {}'.format(datetime.datetime.now()))
+    i = 1
+    feature_ids = []
+    for f in features:
+        print('Starting asset {} at {}'.format(str(i), datetime.datetime.now()))
+        # show cloud coverage %
+        # print('Percent Cloud Coverage:')
+        # p(f['properties']['cloud_percent'])
+        # print('')
+        # Get the assets link for the item
+        assets_url = f["_links"]["assets"]
+        
+        # append the feature id's to a list
+        # will eventually use this via the orders api to order and clip features
+        feature_ids.append(f["id"])
+
+        # Send a GET request to the assets url for the item (Get the list of available assets for the item)
+        res = session.get(assets_url)
+
+        # Assign a variable to the response
+        assets = res.json()
+        p(json_response)
+
+        i=i+1
+
+    return feature_ids
 # How to Paginate:
 # 1) Request a page of search results
 # 2) do something with the page of results
@@ -477,6 +560,44 @@ def handle_page(res, really_download_images, session, save_dir, planet_api_key, 
     print('Processing (downloads) complete (for this page of results). Moving to next page of results (if present)')
     return 
 
+def fetch_search_page(search_url, session, planet_api_key, search_json = ''):
+    print('Processing results from {}'.format(search_url))
+    if search_json != '':
+        # p(search_json)
+        # NOTE: MUST do json=... to avoid missing post body error msg when posting like below
+        res = session.post(search_url, json=search_json)
+    else:
+        print('PROCCESSING NEXT PAGE. Search params carried over from initial  search')
+        res = session.get(search_url).json()
+
+        #debugging:
+        # debug_var = res
+    # sanity check 
+    # Print response
+    # p(res.json())
+    feature_ids = []
+    feature_ids = handle_search_page(res, session)
+
+    # fixing TypeError: 'Response' object is not subscriptable on next pages
+    try:
+        next_url = res["_links"].get("_next")
+    except:
+        resJSON = res.json()
+        next_url = resJSON["_links"].get("_next")
+        traceback.print_exc()
+
+    if next_url:
+        try:
+            more_feature_ids = handle_search_page(next_url, session) 
+            if len(more_feature_ids > 0):
+                feature_ids.extend(more_feature_ids)
+        except:
+            next_url = ''
+            print('TODO: fix error on last iteration in handle_search_page')
+
+    print('Finished processing results from {}'.format(search_url))
+    return feature_ids
+    
 def fetch_page(search_url, really_download_images, session, save_dir, planet_api_key, search_json = '', overwrite_existing=False):
     print('Processing results from {}'.format(search_url))
     if search_json != '':
