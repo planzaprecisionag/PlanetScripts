@@ -31,3 +31,5 @@ def extract_geometry_from_geojson_file(file_path):
 # geom = features[0]['geometry']
 # print(geom)
 # # %%
+def p(data):
+    print(json.dumps(data, indent=2))

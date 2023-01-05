@@ -3,6 +3,11 @@ import os
 from planet_raster_downloader import get_planet_download_stats, download_planet_rasters, search_planet
 import planet_credentials as plc
 import planet_json_utils as pju
+from planet_raster_downloader_v2 import download_clipped_rasters
+import asyncio
+#fix issue with asyncio running in VSode ipython
+import nest_asyncio
+nest_asyncio.apply()
 
 #%% Getting param values to pass to stats and dl fxns
 # TODO: make form to capture these values
@@ -27,6 +32,8 @@ field_aoi_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\QGIS\FieldPolygons\Fiel
 # loop through all field aoi polygon files in aoi dir
 print('Be sure that AOI polygons are epsg:4326, NOT a projected CRS')
 is_first_file = True
+if is_first_file:
+    print('TEST MODE: Only processing first field file')
 for f in os.listdir(field_aoi_dir):
     aoi_file = os.path.join(field_aoi_dir, f)
     # print('AOI File: {}'.format(aoi_file))
@@ -41,13 +48,13 @@ for f in os.listdir(field_aoi_dir):
             is_first_file = False
 
 #%% SEARCH AND SHOW RESULTS RESPONSE 
-# TODO: eventaully return list of asset id's that will be sent to the order
+# return list of asset id's that will be sent to the order
 # and clip api's to download the clipped imagery that way, replacing the 
 # planet_raster_downloader fxn
 print('Be sure that AOI polygons are epsg:4326, NOT a projected CRS')
-# TESTING - only process one field for now
-print('TEST MODE: ONLY PROCESSING ONE FIELD')
 is_first_field = True
+if is_first_field:
+    print('TEST MODE: Only processing first field file')
 for f in os.listdir(field_aoi_dir):
     aoi_file = os.path.join(field_aoi_dir, f)
     # print('AOI File: {}'.format(aoi_file))
@@ -67,9 +74,9 @@ for f in os.listdir(field_aoi_dir):
 #%% DOWNLOAD IMAGERY
 # loop through all field aoi polygon files in aoi dir
 print('Be sure that AOI polygons are epsg:4326, NOT a projected CRS')
-# TESTING - only process one field for now
-print('TEST MODE: ONLY PROCESSING ONE FIELD')
 is_first_field = True
+if is_first_file:
+    print('TEST MODE: Only processing first field file')
 for f in os.listdir(field_aoi_dir):
     aoi_file = os.path.join(field_aoi_dir, f)
     # print('AOI File: {}'.format(aoi_file))
@@ -121,4 +128,62 @@ asset_status = assets["status"]
 print(asset_status)
 
 
+# %% ***TESTING RASTER CLIPPING AND DOWNLOADING MODULE***
+# root dir holding field boundary polygons. will loop through this and pull
+# planet rasters using these as AOI's
+field_aoi_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\QGIS\FieldPolygons\FieldAOIsForPlanetDownload'
+download_save_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\Testing'
+planet_base_url = "https://api.planet.com/data/v1"
+item_types = ['PSScene']
+item_type = item_types[0]
+asset_type = 'ortho_analytic_4b_sr'
+bundle_type = 'analytic_sr_udm2'
+planet_api_key = plc.get_planet_api_key()
+really_download_images = True
+debug_flag = True
+# search params to get list of feature ids to pass to clip and orders api for dl
+img_start_date_string = "2022-04-01T00:00:00.000Z"
+img_end_date_string = "2022-04-07T00:00:00.000Z"
+clear_percent = 30 #% of area not impacted by cloud, haze, shadow, or snow
+
+orders = []
+
+is_first_field = True
+if is_first_field:
+    print('TEST MODE: Only processing first field file')
+for f in os.listdir(field_aoi_dir):
+    aoi_file = os.path.join(field_aoi_dir, f)
+    # print('AOI File: {}'.format(aoi_file))
+    if os.path.isfile(aoi_file) and f.endswith('.geojson'):
+        # print(f)
+        field_aoi = pju.extract_geometry_from_geojson_file(aoi_file)
+        # print(field_aoi)
+        if is_first_field:
+            feature_ids = search_planet(item_types, field_aoi, 
+                asset_type, planet_api_key, planet_base_url, img_start_date_string,
+                img_end_date_string, clear_percent)
+            # print('should only see this once')
+            is_first_field = False
+
+            if not really_download_images:
+                    print('Flag not set to actually download images, testing only.')
+                    print()
+            else:
+                print('Downloading {}'.format(feature_ids))
+                
+                order = asyncio.run(download_clipped_rasters(field_aoi, download_save_dir, 
+                    item_type, bundle_type, feature_ids, planet_api_key, debug_flag))
+                orders.append(order)
+
+
+print('Clipping order complete. Must now hit the orders api and dl the images. fun.')
+
+# loop through orders and get 
+# orders[0]['_links']['_self'] in each then hit that and get
+# order['_links']['results']
+# and loop through that to get each result['location']
+#%%TODO: create instance of orders client to try to dl the order based upon the id returned from above...
+# eventually, ts why their script is failing...
 # %%
+# testing/debugging:
+

@@ -10,6 +10,9 @@ from planet import Session, DataClient, OrdersClient
 import rasterio
 from rasterio.plot import show
 import requests
+from  datetime import datetime
+from planet_json_utils import p
+import planet_raster_downloader as prd_v1
 
 #%%
 # API Key stored as an env variable
@@ -65,7 +68,8 @@ multi_src_products = [
 ]
 
 #%% fxn defs
-async def poll_and_download(order):
+# PL - updated to pass download save dir param 1/5/2023
+async def poll_and_download(order, download_root_dir):
     async with Session() as sess:
         cl = OrdersClient(sess)
 
@@ -78,7 +82,7 @@ async def poll_and_download(order):
             await cl.wait(order['id'], callback=bar.update_state)
 
         # if we get here that means the order completed. Yay! Download the files.
-        filenames = await cl.download_order(order['id'])
+        filenames = await cl.download_order(order_id=order['id'], directory=download_root_dir)
 # define helpful functions for visualizing downloaded imagery
 def show_rgb(img_file):
     with rasterio.open(img_file) as src:
@@ -109,6 +113,8 @@ async def do_download_example():
         async with Session() as sess:
             cl = OrdersClient(sess)
             order = await cl.create_order(request)
+            # PL - the class appears to be missing any poll_and_download method.... 
+            # updating my call to use cl.download_order
             download = await cl.poll_and_download(order)
         img_file = next(download[d] for d in download
                         if d.endswith('_3B_AnalyticMS.tif'))
@@ -159,3 +165,54 @@ async def do_clip_example():
     # %%
     # show_rgb(img_file)
     show_rgb(clip_img_file)
+
+async def download_clipped_rasters(clip_aoi_geom, file_save_path, item_type, product_bundle, product_id_list, planet_api_key, debug=False):
+
+    # Setup the session
+    session = requests.Session()
+
+    # Authenticate
+    session.auth = (planet_api_key, "")
+    
+    # define the clip tool
+    clip = {
+        "clip": {
+            "aoi": clip_aoi_geom
+        }
+    }
+
+    #define products 
+    products = {
+        "item_ids": product_id_list,
+        "item_type": item_type,
+        "product_bundle": product_bundle
+    }
+
+    # create an order request with the clipping tool
+    timestamp = datetime.now()
+    order_name = 'ClippedOrder_{}'.format(str(timestamp))
+    request_clip = {
+    "name": order_name,
+    "source_type": "scenes",
+    "products": [products],
+    "tools": [clip]
+    }
+
+    if debug:
+        print('Request Clip:')
+        p(request_clip)
+        print()
+
+    # allow for caching so we don't always run clip
+    run_clip = True
+    if run_clip:
+        async with Session() as sess:
+            cl = OrdersClient(sess)
+            order = await cl.create_order(request_clip)
+            #PL - below doesn't work... returning orderid and will manually dl
+
+            # download = await poll_and_download(order)
+    #         downloaded_clip_files = await poll_and_download(order, file_save_path) # pl changed from line above
+    # clip_img_file = next(downloaded_clip_files[d] for d in downloaded_clip_files
+    #                     if d.endswith('_clip.tif'))
+            return order
