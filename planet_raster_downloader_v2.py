@@ -70,6 +70,7 @@ multi_src_products = [
 #%% fxn defs
 # PL - updated to pass download save dir param 1/5/2023
 async def poll_and_download(order, download_root_dir):
+    retry_delay_seconds = 60
     async with Session() as sess:
         cl = OrdersClient(sess)
 
@@ -79,7 +80,7 @@ async def poll_and_download(order, download_root_dir):
             bar.update(state='created', order_id=order['id'])
 
             # poll...poll...poll...
-            await cl.wait(order['id'], callback=bar.update_state)
+            await cl.wait(order['id'], callback=bar.update_state, delay=retry_delay_seconds)
 
         # if we get here that means the order completed. Yay! Download the files.
         filenames = await cl.download_order(order_id=order['id'], directory=download_root_dir)
@@ -166,7 +167,12 @@ async def do_clip_example():
     # show_rgb(img_file)
     show_rgb(clip_img_file)
 
-async def download_clipped_rasters(clip_aoi_geom, file_save_path, item_type, product_bundle, product_id_list, planet_api_key, debug=False):
+async def order_and_download_clipped_rasters(clip_aoi_geom, file_save_path, item_type, product_bundle, product_id_list, planet_api_key, debug=False):
+    # PL - 1/6/2023
+    # note: had to update the planet orders.py lib to replace the dl location url
+    # ln 269:
+    # updated_location = location.replace(r'https://api.planet.com/compute/ops/download/', r'https://link.planet.com/orders/v2/download')
+    # this successfully downloaded the orders
 
     # Setup the session
     session = requests.Session()
@@ -209,10 +215,45 @@ async def download_clipped_rasters(clip_aoi_geom, file_save_path, item_type, pro
         async with Session() as sess:
             cl = OrdersClient(sess)
             order = await cl.create_order(request_clip)
-            #PL - below doesn't work... returning orderid and will manually dl
+            # PL - 1/6/2023 
+            # fixed issue with dl link redirecting to new url and preventing dl
+            # TODO: (if neccessary): update code to detect redirect, extract new url from
+            # response and use that to dl assets. For now, using a hard-coded updated base-url
+            # is working
 
-            # download = await poll_and_download(order)
+            download = await poll_and_download(order, download_root_dir=file_save_path)
     #         downloaded_clip_files = await poll_and_download(order, file_save_path) # pl changed from line above
     # clip_img_file = next(downloaded_clip_files[d] for d in downloaded_clip_files
     #                     if d.endswith('_clip.tif'))
             return order
+
+async def download_order(order_id, download_root_dir, planet_api_key, debug=False):
+    # download planet rasters, metadata, etc based upon order id
+    # 1. try to download order via Planet lib
+    # method def:
+    # async def download_order(self,
+        #  order_id: str,
+        #  directory: Path = Path('.'),
+        #  overwrite: bool = False,
+        #  progress_bar: bool = False,
+        #  checksum: str = None) -> typing.List[Path]:
+    # Setup the session
+    session = requests.Session()
+    # Authenticate
+    session.auth = (planet_api_key, "")
+    filenames = ['no files']
+    async with Session() as sess:
+        cl = OrdersClient(sess)
+        # Use "reporting" to manage polling for order status
+        with reporting.StateBar(state='creating') as bar:
+            # Grab the order ID
+            bar.update(state='created', order_id=order_id)
+
+            # poll...poll...poll...
+            # await cl.wait(order_id, callback=bar.update_state, delay=5)
+
+            # if we get here that means the order completed. Yay! Download the files.
+            filenames = await cl.download_order(order_id=order_id, directory=download_root_dir)
+    
+    print('DONE')
+    return filenames
