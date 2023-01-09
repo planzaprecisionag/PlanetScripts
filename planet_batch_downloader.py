@@ -3,11 +3,13 @@ import os
 from planet_raster_downloader import get_planet_download_stats, download_planet_rasters, search_planet
 import planet_credentials as plc
 import planet_json_utils as pju
-from planet_raster_downloader_v2 import download_clipped_rasters
+from planet_raster_downloader_v2 import order_and_download_clipped_rasters, download_order
 import asyncio
 #fix issue with asyncio running in VSode ipython
 import nest_asyncio
 nest_asyncio.apply()
+
+# %%
 
 #%% Getting param values to pass to stats and dl fxns
 # TODO: make form to capture these values
@@ -16,9 +18,9 @@ item_types = ['PSScene']
 asset_type = 'ortho_analytic_4b_sr'
 planet_api_key = plc.get_planet_api_key()
 planet_base_url = "https://api.planet.com/data/v1"
-img_start_date_string = "2022-04-01T00:00:00.000Z"
+img_start_date_string = "2022-04-08T00:00:00.000Z"
 # img_end_date_string = "2022-10-31T00:00:00.000Z"
-img_end_date_string = "2022-04-07T00:00:00.000Z"
+img_end_date_string = "2022-05-08T00:00:00.000Z"
 # see https://developers.planet.com/docs/data/psscene/ for property filters
 # cloud_cover_percent_max = 0.8
 clear_percent = 30 #% of area not impacted by cloud, haze, shadow, or snow
@@ -132,7 +134,7 @@ print(asset_status)
 # root dir holding field boundary polygons. will loop through this and pull
 # planet rasters using these as AOI's
 field_aoi_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\QGIS\FieldPolygons\FieldAOIsForPlanetDownload'
-download_save_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\Testing'
+download_save_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\Testing2'
 planet_base_url = "https://api.planet.com/data/v1"
 item_types = ['PSScene']
 item_type = item_types[0]
@@ -142,8 +144,8 @@ planet_api_key = plc.get_planet_api_key()
 really_download_images = True
 debug_flag = True
 # search params to get list of feature ids to pass to clip and orders api for dl
-img_start_date_string = "2022-04-01T00:00:00.000Z"
-img_end_date_string = "2022-04-07T00:00:00.000Z"
+img_start_date_string = "2022-04-08T00:00:00.000Z"
+img_end_date_string = "2022-05-07T00:00:00.000Z"
 clear_percent = 30 #% of area not impacted by cloud, haze, shadow, or snow
 
 orders = []
@@ -165,25 +167,63 @@ for f in os.listdir(field_aoi_dir):
             # print('should only see this once')
             is_first_field = False
 
+            # filter results to only include one image per day
+            feature_ids_one_per_day = pju.select_one_raster_per_day(feature_ids)
+
             if not really_download_images:
                     print('Flag not set to actually download images, testing only.')
                     print()
             else:
-                print('Downloading {}'.format(feature_ids))
+                print('Downloading {}'.format(feature_ids_one_per_day))
                 
-                order = asyncio.run(download_clipped_rasters(field_aoi, download_save_dir, 
-                    item_type, bundle_type, feature_ids, planet_api_key, debug_flag))
+                order = asyncio.run(order_and_download_clipped_rasters(field_aoi, download_save_dir, 
+                    item_type, bundle_type, feature_ids_one_per_day, planet_api_key, debug_flag))
                 orders.append(order)
 
 
-print('Clipping order complete. Must now hit the orders api and dl the images. fun.')
+print('Downloading clipped rasters complete.')
+print('File location: {}'.format(download_save_dir))
 
 # loop through orders and get 
 # orders[0]['_links']['_self'] in each then hit that and get
 # order['_links']['results']
 # and loop through that to get each result['location']
-#%%TODO: create instance of orders client to try to dl the order based upon the id returned from above...
-# eventually, ts why their script is failing...
-# %%
-# testing/debugging:
 
+#%% 
+# DOWNLOAD BY ORDER ID
+# Call Planet's download method directly to see if this works:
+# works - was issue with download url redirecting to new location
+# hard coded url update in planet's orders.py file and dl now works
+import os
+from planet_raster_downloader import get_planet_download_stats, download_planet_rasters, search_planet
+import planet_credentials as plc
+import planet_json_utils as pju
+from planet_raster_downloader_v2 import order_and_download_clipped_rasters, download_order
+import asyncio
+#fix issue with asyncio running in VSode ipython
+import nest_asyncio
+nest_asyncio.apply()
+
+order_id = '071aa6dd-592b-4f36-9720-94dd11ecbf51'
+download_save_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\Testing'
+planet_api_key = plc.get_planet_api_key()
+
+files = download_order(order_id, download_save_dir, planet_api_key)
+print('Downloaded:')
+decoded_files = asyncio.gather(files)
+print(decoded_files)
+
+
+# %% testing method to get single image per day
+test_ids = ['20220505_150056_52_2458', '20220422_150137_05_2455', 
+            '20220422_150134_77_2455', '20220503_154639_90_227c', 
+            '20220505_153231_29_2474', '20220505_153228_99_2474', 
+            '20220429_155044_93_2413', '20220430_153257_14_2483', 
+            '20220425_154730_22_2407', '20220425_154727_94_2407', 
+            '20220424_154550_97_2424', '20220424_154553_28_2424', 
+            '20220415_153036_53_2489', '20220413_153050_66_2479', 
+            '20220413_153048_14_2479', '20220411_154350_40_241c', 
+            '20220411_152843_1002']
+single_day_ids = pju.select_one_raster_per_day(test_ids)
+print(single_day_ids)
+# %%
