@@ -18,9 +18,9 @@ item_types = ['PSScene']
 asset_type = 'ortho_analytic_4b_sr'
 planet_api_key = plc.get_planet_api_key()
 planet_base_url = "https://api.planet.com/data/v1"
-img_start_date_string = "2022-04-08T00:00:00.000Z"
+img_start_date_string = "2022-05-09T00:00:00.000Z"
 # img_end_date_string = "2022-10-31T00:00:00.000Z"
-img_end_date_string = "2022-05-08T00:00:00.000Z"
+img_end_date_string = "2022-06-08T00:00:00.000Z"
 # see https://developers.planet.com/docs/data/psscene/ for property filters
 # cloud_cover_percent_max = 0.8
 clear_percent = 30 #% of area not impacted by cloud, haze, shadow, or snow
@@ -53,6 +53,7 @@ for f in os.listdir(field_aoi_dir):
 # return list of asset id's that will be sent to the order
 # and clip api's to download the clipped imagery that way, replacing the 
 # planet_raster_downloader fxn
+field_aoi_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\QGIS\FieldPolygons\CombinedAOIsForPlanet100kmMinDownload'
 print('Be sure that AOI polygons are epsg:4326, NOT a projected CRS')
 is_first_field = True
 if is_first_field:
@@ -60,7 +61,7 @@ if is_first_field:
 for f in os.listdir(field_aoi_dir):
     aoi_file = os.path.join(field_aoi_dir, f)
     # print('AOI File: {}'.format(aoi_file))
-    if os.path.isfile(aoi_file) and f.endswith('.geojson'):
+    if os.path.isfile(aoi_file) and f.endswith('AllFieldsMultipolygonAOI_GeoJSON2.geojson'):    
         # print(f)
         field_aoi = pju.extract_geometry_from_geojson_file(aoi_file)
         # print(field_aoi)
@@ -86,7 +87,7 @@ for f in os.listdir(field_aoi_dir):
         # print(f)
         field_aoi = pju.extract_geometry_from_geojson_file(aoi_file)
         # print(field_aoi)
-        if is_first_field:
+        if is_first_field and False: # use clipped dl method to get clipped rasters, this gets whole scene
             download_planet_rasters(download_save_dir, item_types, field_aoi, 
                 asset_type, planet_api_key, planet_base_url, img_start_date_string,
                 img_end_date_string, clear_percent, really_download_images=True, 
@@ -133,8 +134,9 @@ print(asset_status)
 # %% ***TESTING RASTER CLIPPING AND DOWNLOADING MODULE***
 # root dir holding field boundary polygons. will loop through this and pull
 # planet rasters using these as AOI's
-field_aoi_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\QGIS\FieldPolygons\FieldAOIsForPlanetDownload'
-download_save_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\Testing2'
+# field_aoi_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\QGIS\FieldPolygons\FieldAOIsForPlanetDownload'
+field_aoi_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\QGIS\FieldPolygons\CombinedAOIsForPlanet100kmMinDownload'
+download_save_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\Testing3'
 planet_base_url = "https://api.planet.com/data/v1"
 item_types = ['PSScene']
 item_type = item_types[0]
@@ -144,9 +146,9 @@ planet_api_key = plc.get_planet_api_key()
 really_download_images = True
 debug_flag = True
 # search params to get list of feature ids to pass to clip and orders api for dl
-img_start_date_string = "2022-04-08T00:00:00.000Z"
-img_end_date_string = "2022-05-07T00:00:00.000Z"
-clear_percent = 30 #% of area not impacted by cloud, haze, shadow, or snow
+img_start_date_string = "2022-06-08T00:00:00.000Z"
+img_end_date_string = "2022-10-31T00:00:00.000Z"
+clear_percent = 80 #% of area not impacted by cloud, haze, shadow, or snow
 
 orders = []
 
@@ -156,7 +158,10 @@ if is_first_field:
 for f in os.listdir(field_aoi_dir):
     aoi_file = os.path.join(field_aoi_dir, f)
     # print('AOI File: {}'.format(aoi_file))
-    if os.path.isfile(aoi_file) and f.endswith('.geojson'):
+    # if os.path.isfile(aoi_file) and f.endswith('.geojson'):
+    # using multipolygon to pull and clip all fields at once 
+    # hopefully this will also let me not exceed the monthly dl quota
+    if os.path.isfile(aoi_file) and f.endswith('AllFieldsMultipolygonAOI_GeoJSON2.geojson'):    
         # print(f)
         field_aoi = pju.extract_geometry_from_geojson_file(aoi_file)
         # print(field_aoi)
@@ -168,16 +173,16 @@ for f in os.listdir(field_aoi_dir):
             is_first_field = False
 
             # filter results to only include one image per day
-            feature_ids_one_per_day = pju.select_one_raster_per_day(feature_ids)
+            # feature_ids_one_per_day = pju.select_one_raster_per_day(feature_ids)
 
             if not really_download_images:
                     print('Flag not set to actually download images, testing only.')
                     print()
             else:
-                print('Downloading {}'.format(feature_ids_one_per_day))
+                print('Downloading {}'.format(feature_ids))
                 
                 order = asyncio.run(order_and_download_clipped_rasters(field_aoi, download_save_dir, 
-                    item_type, bundle_type, feature_ids_one_per_day, planet_api_key, debug_flag))
+                    item_type, bundle_type, feature_ids, planet_api_key, debug_flag))
                 orders.append(order)
 
 
