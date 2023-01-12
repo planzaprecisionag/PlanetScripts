@@ -49,7 +49,7 @@ def do_conversion(asset_type, raster_file_path, coeffs):
     refl_fname = get_updated_fname(raster_file_path)
 
     # scaling factor
-    # his warrants some explanation: Reflectance is generally defined as a floating point number 
+    # this warrants some explanation: Reflectance is generally defined as a floating point number 
     # between 0 and 1, but image file formats are much more commonly stored as unsigned integers. 
     # A common practice in the industry is to multiply the radiance value by 10,000, 
     # then save the result as a file with data type uint16.
