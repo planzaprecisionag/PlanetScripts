@@ -1,6 +1,8 @@
 #%%
 from osgeo import gdal, ogr, osr
 gdal.UseExceptions()
+import os
+from collections import OrderedDict
 
 # %%
 # NOTE: be sure to set GDAL objects to none when done to 
@@ -76,3 +78,40 @@ def check_for_same_crs(gdal_raster, ogr_vector):
         vector_crs = str(spatialRef.GetAttrValue('authority', 1))
 
     return raster_crs == vector_crs
+
+def get_rasters_by_aoi_vector(aoi_file_path, raster_root_dir, raster_file_ending, 
+    recursive_search=True, sort_list=True):
+    raster_files_covering_the_aoi = []
+
+    if recursive_search:
+        for path, subdirs, files in os.walk(raster_root_dir):
+            for f in files:
+                if f.endswith(raster_file_ending):
+                    file_path = os.path.join(path, f)
+                    if check_if_raster_intersects_vector(file_path, aoi_file_path):
+                        raster_files_covering_the_aoi.append(file_path)
+    else:
+        for f in os.listdir(raster_root_dir):
+            if f.endswith(raster_file_ending):
+                file_path = os.path.join(raster_root_dir, f)
+                if check_if_raster_intersects_vector(file_path, aoi_file_path):
+                    raster_files_covering_the_aoi.append(file_path)
+
+    # raster_files_covering_the_aoi = sorted(raster_files_covering_the_aoi)
+
+    if sort_list:
+        raster_files_covering_the_aoi = sort_planet_rasters_by_date(raster_files_covering_the_aoi)
+    
+    return raster_files_covering_the_aoi
+
+def sort_planet_rasters_by_date(planet_raster_filepaths, sort_descending=False):
+    raster_dict = {}
+    for r in planet_raster_filepaths:
+        file_name = os.path.basename(r)
+        raster_dict[file_name] = r
+
+    # now sort the dict by key, which is the filename, it starts with the date, so no need to 
+    # extract date etc 
+    sorted_rasters = OrderedDict(sorted(raster_dict.items(), reverse=sort_descending, key=lambda t: t[0]))
+
+    return sorted_rasters
