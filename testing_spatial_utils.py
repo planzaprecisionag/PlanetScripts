@@ -71,4 +71,19 @@ print('Raster CRS: {}'.format(raster_crs))
 print('Vector CRS: {}'.format(vector_crs))
 
 
+# %% TESTING FXN TO RETURN SORTED (BY DATE, ASC) LIST OF RASTERS BY AOI VECTOR
+
+raster_root_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\Testing3'
+field_aoi_file_path = r'C:\Users\P\Box\Phillip\OFE Biologicals\QGIS\FieldPolygons\Field5PolygonCoords_GeoJSON_epsg32618_correct.geojson'
+raster_file_ending = '_SR_clip.tif'
+
+# first, test fxn that returns list of rasters by aoi (without sort)
+rasters_in_aoi_unsorted = psu.get_rasters_by_aoi_vector(field_aoi_file_path, raster_root_dir, raster_file_ending, recursive_search=True, sort_list=False)
+
+# next, test same fxn with sort
+rasters_in_aoi_unsorted_asc = psu.get_rasters_by_aoi_vector(field_aoi_file_path, raster_root_dir, raster_file_ending, recursive_search=True, sort_list=True)
+
+# next, test sort fxn sorting descending
+rasters_in_aoi_unsorted_desc = psu.sort_planet_rasters_by_date(rasters_in_aoi_unsorted, sort_descending=True)
+
 # %%
