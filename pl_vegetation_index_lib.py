@@ -24,7 +24,7 @@ def get_raster_info(raster_file_path):
         raster_info['shape'] = raster.shape
     return raster_info
 
-def calculate_vegetation_indices(raster_file_path, indices_to_calculate, band_mappings: dict):
+def generate_vegetation_index_rasters(raster_file_path, indices_to_calculate, band_mappings: dict):
     # get raster metadata
     raster_info  = get_raster_info(raster_file_path)
 
@@ -76,11 +76,16 @@ def calculate_vegetation_indices(raster_file_path, indices_to_calculate, band_ma
         ndvi = (nir - red)/(nir + red)
 
         #add new band to new image and write file
-        with rasterio.open(ndvi_file_path, 'w', decimal_precision=16, **kwargs) as dst:
-            dst.write_band(1, ndvi)
-
-        print('Wrote NDVI file to: {}'.format(ndvi_file_path))
-
+        if not os.path.exists(ndvi_file_path):
+            try:
+                with rasterio.open(ndvi_file_path, 'w', decimal_precision=16, **kwargs) as dst:
+                    dst.write_band(1, ndvi)
+                print('Wrote NDVI file to: {}'.format(ndvi_file_path))
+            except:
+                print('Error writing NDVI file for {}'.format(ndvi_file_path))
+        else:
+            print('WARNING: NDVI File already exists. Delete it and rerun this to recreate.')
+            print(ndvi_file_path)
     if 'EVI' in indices_to_calculate or 'evi' in indices_to_calculate:
         # calculate EVI and add as band in new raster
         # define evi coeffiecients, apparently they are the same for all
@@ -119,9 +124,15 @@ def calculate_vegetation_indices(raster_file_path, indices_to_calculate, band_ma
             evi = evi_g * ((nir - red) / (nir + evi_c1 * red - evi_c2 * blue + evi_l))
 
         #add new band to new image and write file
-        with rasterio.open(evi_file_path, 'w', decimal_precision=16, **kwargs) as dst:
-            dst.write_band(1, evi)
-
+        if not os.path.exists(evi_file_path):
+            try:
+                with rasterio.open(evi_file_path, 'w', decimal_precision=16, **kwargs) as dst:
+                    dst.write_band(1, evi)
+            except:
+                    print('Error writing EVI file for {}'.format(evi_file_path))
+        else:
+            print('WARNING: EVI File already exists. Delete it and rerun this to recreate.')
+            print(evi_file_path)
 
     if 'MSAVI' in indices_to_calculate or 'msavi' in indices_to_calculate:
         # MSAVI good for limited canopy coverage (ie season start and end)
@@ -161,8 +172,15 @@ def calculate_vegetation_indices(raster_file_path, indices_to_calculate, band_ma
             msavi = (2 * nir + 1 - np.sqrt((2 * nir + 1)**2 - 8 * (nir - red))) / 2
 
         #add new band to new image and write file
-        with rasterio.open(msavi_file_path, 'w', decimal_precision=16, **kwargs) as dst:
-            dst.write_band(1, msavi)
+        if not os.path.exists(msavi_file_path):
+            try:
+                with rasterio.open(msavi_file_path, 'w', decimal_precision=16, **kwargs) as dst:
+                    dst.write_band(1, msavi)
+            except:
+                    print('Error writing MSAVI file for {}'.format(msavi_file_path))
+        else:
+            print('WARNING: MSAVI File already exists. Delete it and rerun this to recreate.')
+            print(msavi_file_path)
 
     if 'NDRE' in indices_to_calculate or 'ndre' in indices_to_calculate:
         # ndre - good for fuller canopy (ie mid to late mid season when ndvi may saturate)
@@ -191,8 +209,15 @@ def calculate_vegetation_indices(raster_file_path, indices_to_calculate, band_ma
                 ndre = (re - red) / (re + red)
 
             #add new band to new image and write file
-            with rasterio.open(ndre_file_path, 'w', decimal_precision=16, **kwargs) as dst:
-                dst.write_band(1, ndre)
+            if not os.path.exists(ndre_file_path):
+                try:
+                    with rasterio.open(ndre_file_path, 'w', decimal_precision=16, **kwargs) as dst:
+                        dst.write_band(1, ndre)
+                except:
+                        print('Error writing NDRE file for {}'.format(ndre_file_path))
+            else:
+                print('WARNING: NDRE File already exists. Delete it and rerun this to recreate.')
+                print(ndre_file_path)
         else:
             print('WARNING: CANNOT CALCULATE NDRE WITHOUT RED EDGE BAND')
     if 'CCCI' in indices_to_calculate or 'ccci' in indices_to_calculate:
@@ -224,7 +249,14 @@ def calculate_vegetation_indices(raster_file_path, indices_to_calculate, band_ma
                 ndvi = (nir - red) / (nir + red)
                 ccci = ndre / ndvi
             #add new band to new image and write file
-            with rasterio.open(ccci_file_path, 'w', decimal_precision=16, **kwargs) as dst:
-                dst.write_band(1, ccci)
+            if not os.path.exists(ccci_file_path):
+                try:
+                    with rasterio.open(ccci_file_path, 'w', decimal_precision=16, **kwargs) as dst:
+                        dst.write_band(1, ccci)
+                except:
+                        print('Error writing CCCI file for {}'.format(ccci_file_path))
+            else:
+                print('WARNING: CCCI File already exists. Delete it and rerun this to recreate.')
+                print(ccci_file_path)
         else:
             print('WARNING: CANNOT CALCULATE CCCI WITHOUT RED EDGE BAND')

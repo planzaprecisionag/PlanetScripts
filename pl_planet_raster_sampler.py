@@ -30,7 +30,15 @@ def get_date_from_planet_raster_name(fname):
     # filname in format of:
     # 20220918_154732_85_2414_3B_AnalyticMS_SR.tif
     # YYYYMMDD_HHMMSS_??_<satellite id>_<product level>_<product type>.tif
-    raster_date = 'TODO'
+    raster_time = fname.split('_')[1]
+    return raster_time
+
+def get_time_from_planet_raster_name(fname):
+    # parse raster filename to extract acquisition date
+    # filname in format of:
+    # 20220918_154732_85_2414_3B_AnalyticMS_SR.tif
+    # YYYYMMDD_HHMMSS_??_<satellite id>_<product level>_<product type>.tif
+    raster_date = fname.split('_')[0]
     return raster_date
 
 #%% Constants
