@@ -3,6 +3,7 @@ from osgeo import gdal, ogr, osr
 gdal.UseExceptions()
 import os
 from collections import OrderedDict
+import rasterio
 
 # %%
 # NOTE: be sure to set GDAL objects to none when done to 
@@ -55,6 +56,20 @@ def check_if_raster_intersects_vector(raster_file_path, vector_file_path):
     vector = None
 
     return raster_intersects_vector
+
+def check_if_raster_intersects_points(raster_file_path:str, point_coords:list):
+    # adapted from code sample at: https://stackoverflow.com/questions/67893343/how-to-raise-an-error-that-coordinates-are-out-of-raster-bounds-rasterio-sample
+    # NOTE: raster and points must be in same CRS
+    intersects = False
+    with rasterio.open(raster_file_path) as raster:
+        # loop through points list, return True (ie point intersects with
+        # raster) if any point in list intersects with raster
+        for x, y in point_coords:
+            row, col = raster.index(x,y)
+            if not any([row<0, col<0, row >= raster.height, col >= raster.width]):
+                intersects = True
+    
+    return intersects
 
 def check_for_same_crs(gdal_raster, ogr_vector):
     if gdal_raster is None:
@@ -115,3 +130,8 @@ def sort_planet_rasters_by_date(planet_raster_filepaths, sort_descending=False):
     sorted_rasters = OrderedDict(sorted(raster_dict.items(), reverse=sort_descending, key=lambda t: t[0]))
 
     return sorted_rasters
+
+def get_rasters_intersecting_points(points_gdf, raster_root_dir, raster_file_ending, 
+    recursive_search=True, sort_list=True):
+
+    raster_files_covering_the_pts = []
