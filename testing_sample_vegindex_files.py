@@ -42,9 +42,28 @@ print('Intersects: {}'.format(str(intersects)))
 
 intersects2 = plsu.check_if_raster_intersects_points(test_raster_path, test_points2)
 print('Intersects2: {}'.format(str(intersects2)))
+
 #%% testing fxn to return list of raster filepaths intersecting points for a farm
-points_file_path = r''
+points_file_path = rpoints_file_path = r'C:\Users\P\Box\Phillip\OFE Biologicals\QGIS\SamplePoints\OFEBiologicalsSurveyPoints_EPSG32618.geojson'
 test_farm_name = 'Curc 32B'
 raster_root_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\Testing3'
 field_aoi_file_path = r'C:\Users\P\Box\Phillip\OFE Biologicals\QGIS\FieldPolygons\Field5PolygonCoords_GeoJSON_epsg32618_correct.geojson'
 raster_file_ending = '_SR_clip.tif'
+farm_id_col_name = 'Farm Name'
+sample_id_col_name = 'Sample ID'
+
+# below returns two dicts:
+# {key, [point_x, point_y]}
+#  {'key', ordered_dict{fname, filepath}}
+pts_dict, rasters_dict = plsu.get_rasters_by_points(points_file_path, raster_root_dir, 
+raster_file_ending, farm_id_col_name, sample_id_col_name, recursive_search=True,  
+sort_list=True)
+
+#%%
+test_farm_pts_dict = pts_dict['Blodgett #1']
+test_farm_rasters_dict = rasters_dict['Blodgett #1']
+
+test_farm_pts_dict
+test_farm_rasters_dict
+
+# %%
