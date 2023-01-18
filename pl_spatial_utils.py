@@ -120,7 +120,7 @@ def get_rasters_by_aoi_vector(aoi_file_path, raster_root_dir, raster_file_ending
     
     return raster_files_covering_the_aoi
 
-def get_rasters_by_points(points_file_path, raster_root_dir, raster_file_ending, 
+def get_rasters_by_points(points_file_path, raster_root_dir, raster_file_endings, 
     group_id_col_name, point_id_col_name, recursive_search=True, sort_list=True):
 
     # load file into gdf
@@ -143,16 +143,18 @@ def get_rasters_by_points(points_file_path, raster_root_dir, raster_file_ending,
         if recursive_search:
             for path, subdirs, files in os.walk(raster_root_dir):
                 for f in files:
-                    if f.endswith(raster_file_ending):
-                        file_path = os.path.join(path, f)
-                        if check_if_raster_intersects_points(file_path, group_xys):
-                            raster_files_covering_the_aoi.append(file_path)
+                    for raster_file_ending  in raster_file_endings:
+                        if f.endswith(raster_file_ending):
+                            file_path = os.path.join(path, f)
+                            if check_if_raster_intersects_points(file_path, group_xys):
+                                raster_files_covering_the_aoi.append(file_path)
         else:
             for f in os.listdir(raster_root_dir):
-                if f.endswith(raster_file_ending):
-                    file_path = os.path.join(raster_root_dir, f)
-                    if check_if_raster_intersects_points(file_path, group_xys):
-                        raster_files_covering_the_aoi.append(file_path)
+                for raster_file_ending  in raster_file_endings:
+                    if f.endswith(raster_file_ending):
+                        file_path = os.path.join(raster_root_dir, f)
+                        if check_if_raster_intersects_points(file_path, group_xys):
+                            raster_files_covering_the_aoi.append(file_path)
 
         # raster_files_covering_the_aoi = sorted(raster_files_covering_the_aoi)
 
@@ -162,6 +164,7 @@ def get_rasters_by_points(points_file_path, raster_root_dir, raster_file_ending,
         # add entity's key to dict with list of rasters intersecting its points
         entity_raster_dict[name] = raster_files_covering_the_aoi
 
+    print()
     print('Processing Complete')
     return entity_points_dict, entity_raster_dict
 
