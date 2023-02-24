@@ -18,9 +18,19 @@ def check_if_raster_intersects_vector(raster_file_path, vector_file_path):
     raster = gdal.Open(raster_file_path)
     vector = ogr.Open(vector_file_path)
 
+    if raster is None:
+        print('Error loading raster. Raster is none.')
+        print(raster_file_path)
+        return False
+    
+    if vector is None:
+        print('Error loading vector. Vector is none.')
+        print(vector_file_path)
+        return False
+
     #check to ensure that both are in the same crs
     if not check_for_same_crs(raster, vector):
-        print('ERROR: CRS values not the same for both files')
+        print('WARNING: CRS values not the same for both files')
         return False
 
     # Get raster geometry
@@ -85,6 +95,7 @@ def check_for_same_crs(gdal_raster, ogr_vector):
         raster_crs = str(srs.GetAttrValue('authority', 1))
 
     if ogr_vector is None:
+        print('Problem Loading Vector; Vector is none.')
         return False
     else:
         layer = ogr_vector.GetLayer()
@@ -93,31 +104,42 @@ def check_for_same_crs(gdal_raster, ogr_vector):
         spatialRef = geo.GetSpatialReference()
         vector_crs = str(spatialRef.GetAttrValue('authority', 1))
 
+    if raster_crs != vector_crs:
+        print('CRS - Raster {}; Vector {}'.format(str(raster_crs), str(vector_crs)))
+
     return raster_crs == vector_crs
 
 def get_rasters_by_aoi_vector(aoi_file_path, raster_root_dir, raster_file_ending, 
     recursive_search=True, sort_list=True):
+    """Use this function to find rasters that cover the specified AOI on a LOCAL filesystem."""
+    
     raster_files_covering_the_aoi = []
-
+    
+    i = 1
     if recursive_search:
         for path, subdirs, files in os.walk(raster_root_dir):
-            for f in files:
+            for f in files:                
                 if f.endswith(raster_file_ending):
+                    print('Checking file {}'.format(str(i)))
                     file_path = os.path.join(path, f)
                     if check_if_raster_intersects_vector(file_path, aoi_file_path):
                         raster_files_covering_the_aoi.append(file_path)
+                i = i + 1
     else:
         for f in os.listdir(raster_root_dir):
             if f.endswith(raster_file_ending):
+                print('Checking file {}'.format(str(i)))
                 file_path = os.path.join(raster_root_dir, f)
                 if check_if_raster_intersects_vector(file_path, aoi_file_path):
                     raster_files_covering_the_aoi.append(file_path)
-
+                i = i + 1
     # raster_files_covering_the_aoi = sorted(raster_files_covering_the_aoi)
 
     if sort_list:
         raster_files_covering_the_aoi = sort_planet_rasters_by_date(raster_files_covering_the_aoi)
     
+
+    print('Processing Complete')
     return raster_files_covering_the_aoi
 
 def get_rasters_by_points(points_file_path, raster_root_dir, raster_file_endings, 
