@@ -28,6 +28,9 @@ def generate_vegetation_index_rasters(raster_file_path, indices_to_calculate, ba
     # get raster metadata
     raster_info  = get_raster_info(raster_file_path)
 
+    #TODO: another index: Spectral Vegetation Index (from 8-band)
+    # spectral vegetation index (ρNIR − ρSWIR)/(ρNIR + ρSWIR), where ρNIR and ρSWIR are the near-infrared (NIR) and shortwave-infrared (SWIR) reflectances, respectively, has been widely used to indicate vegetation moisture condition
+
     # not doing this anymore, writing separate files for each vi now
     # to make it easier to code and easier to interpret what each vi
     # raster contains

@@ -158,12 +158,12 @@ gdf_all_raster_samples = plrsl.sample_rasters_by_points_planet_ofe_biological(
 
 
 # %% Write raster sample data to csv file
-out_file_path = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\SampledRasterData\OFEBiological_Planet_VI_Point_Samples.csv'
-out_file_path = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\SampledRasterData'
+out_file_path = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\SampledRasterData\Combined\OFEBiological_Planet_VI_Point_Samples.csv'
+
 gdf_all_raster_samples.to_csv(out_file_path)
 
 # %% write out raster sample data to separate csv files
-out_file_root_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\SampledRasterData'
+out_file_root_dir = r'C:\Users\P\Box\Phillip\OFE Biologicals\PlanetRasters\SampledRasterData\Individual'
 grouped_data = gdf_all_raster_samples.groupby(farm_id_col_name)
 for farm, data in grouped_data:
     print('Writing csv for {}'.format(farm))

@@ -81,9 +81,9 @@ raster_file_ending = '_SR_clip.tif'
 rasters_in_aoi_unsorted = psu.get_rasters_by_aoi_vector(field_aoi_file_path, raster_root_dir, raster_file_ending, recursive_search=True, sort_list=False)
 
 # next, test same fxn with sort
-rasters_in_aoi_unsorted_asc = psu.get_rasters_by_aoi_vector(field_aoi_file_path, raster_root_dir, raster_file_ending, recursive_search=True, sort_list=True)
+rasters_in_aoi_sorted_asc = psu.get_rasters_by_aoi_vector(field_aoi_file_path, raster_root_dir, raster_file_ending, recursive_search=True, sort_list=True)
 
 # next, test sort fxn sorting descending
-rasters_in_aoi_unsorted_desc = psu.sort_planet_rasters_by_date(rasters_in_aoi_unsorted, sort_descending=True)
+rasters_in_aoi_sorted_desc = psu.sort_planet_rasters_by_date(rasters_in_aoi_unsorted, sort_descending=True)
 
 # %%

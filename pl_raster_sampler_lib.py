@@ -27,15 +27,30 @@ def sample_raster_by_points_crop_height(raster_file_path, sample_points_gdf, ban
     # NOTE: returns gdf in form of [[Index, Geometrey (point), SampleValue[a,b,c,d]]]
     return gdfRet
 
-def sample_rasters_by_points(raster_file_paths:dict, sample_points_gdf, bands_to_sample):
+def sample_rasters_by_points(raster_file_paths:dict, sample_points_gdf, bands_to_sample, format='wide'):
     # sample list of rasters by points
     gdf_ret = sample_points_gdf.copy()
+    
+    #instantiate lists to hold long format values
+    # long_format_farmnames = []
+    # long_format_sample_types = []
+    # long_format_raster_files = []
+    # long_format_sample_values  = []
+    
     for key in raster_file_paths:
         with rasterio.open(raster_file_paths[key]) as raster:
             # rasterio needs list of coords in x,y; use fxn to do this
             coord_list = get_xy_from_gdf(sample_points_gdf)
-            gdf_ret[key] = [x for x in raster.sample(coord_list, bands_to_sample)]
-
+            if format=='wide':
+                gdf_ret[key] = [x for x in raster.sample(coord_list, bands_to_sample)]
+            if format == 'long':
+                # long_format_farmnames.extend()
+                # long_format_raster_files.extend(key)
+                # long_format_sample_values.extend([x for x in raster.sample(coord_list, bands_to_sample)])
+                foo = 'bar'
+    # if format == 'long':
+    #     gdf_ret['RasterFiles'] = long_format_raster_files
+    #     gdf_ret['SampleValues'] = long_format_raster_files
     # defragment the df by returning a copy
     return gdf_ret.copy()
 
